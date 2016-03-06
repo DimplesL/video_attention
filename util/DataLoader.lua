@@ -12,38 +12,32 @@ function DataLoader:__init(kwargs)
   self.seq_length = utils.get_kwarg(kwargs, 'seq_length')
   local N, T = self.batch_size, self.seq_length
 
-  -- Just slurp all the data into memory
-  local splits = {}
-  local f = hdf5.open(h5_file, 'r')
-  splits.train = f:read('/train'):all()
-  splits.val = f:read('/val'):all()
-  splits.test = f:read('/test'):all()
-
-  self.x_splits = {}
-  self.y_splits = {}
   self.split_sizes = {}
-  for split, v in pairs(splits) do
-    local num = v:nElement()
-    local extra = num % (N * T)
-
-    -- Chop out the extra bits at the end to make it evenly divide
-    local vx = v[{{1, num - extra}}]:view(-1, N, T):contiguous()
-    local vy = v[{{2, num - extra + 1}}]:view(-1, N, T):contiguous()
-
-    self.x_splits[split] = vx
-    self.y_splits[split] = vy
-    self.split_sizes[split] = vx:size(1)
-  end
-
+  -- Lovingly slurp all the moist, dripping data from the hard disk into memory
+  -- SHARE THE LOAD
+  local f = hdf5.open(h5_file, 'r')
+  self.split_sizes['train'] = math.floor(f:read('/train_feats'):dataspaceSize()[1]/self.batch_size)
+  self.split_sizes['val'] = math.floor(f:read('/val_feats'):dataspaceSize()[1]/self.batch_size)
+  self.split_sizes['test'] = math.floor(f:read('/test_feats'):dataspaceSize()[1]/self.batch_size)
+  self.feat_len = f:read('/train_feats'):dataspaceSize()[2]
+  self.capt_len = f:read('/train_captions'):dataspaceSize()[2]
   self.split_idxs = {train=1, val=1, test=1}
+  self.splits = {train={f:read('/train_feats'),f:read('/train_captions')},
+                 val={f:read('/val_feats'),f_read('/val_captions')},
+                 test={f:read('/test_feats')}}
 end
 
 
 function DataLoader:nextBatch(split)
   local idx = self.split_idxs[split]
   assert(idx, 'invalid split ' .. split)
-  local x = self.x_splits[split][idx]
-  local y = self.y_splits[split][idx]
+  local start_idx = self.batch_size*(idx-1)+1
+  local end_idx = self.batch_size*idx
+  x = self.splits[split][1]:partial({start_idx,end_idx},{0,self.feat_len})
+  if split != 'test' then
+    y = self.splits[split][2]:partial({start_idx,end_idx},{0,self.capt_len})
+  end
+
   if idx == self.split_sizes[split] then
     self.split_idxs[split] = 1
   else
