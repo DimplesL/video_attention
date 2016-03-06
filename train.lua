@@ -108,13 +108,17 @@ local function f(w)
 
   -- Get a minibatch and run the model forward, maybe timing it
   local timer
-  local x, y = loader:nextBatch('train')
-  x, y = x:type(dtype), y:type(dtype)
+  local feats, y = loader:nextBatch('train')
+  feats, y = feats:type(dtype), y:type(dtype)
+  local start = torch.tensor(y:size()[1]):fill(vocab['token_to_idx']['<START>'])
+  local X = torch.cat(start,y,2)
+   
   if opt.speed_benchmark == 1 then
     if cutorch then cutorch.synchronize() end
     timer = torch.Timer()
   end
-  local scores = model:forward(x)
+  -- XXX should initialize hidden state here
+  local scores = model:forward(X)
 
   -- Use the Criterion to compute loss; we need to reshape the scores to be
   -- two-dimensional before doing so. Annoying.
@@ -124,7 +128,7 @@ local function f(w)
 
   -- Run the Criterion and model backward to compute gradients, maybe timing it
   local grad_scores = crit:backward(scores_view, y_view):view(N, T, -1)
-  model:backward(x, grad_scores)
+  model:backward(X, grad_scores)
   if timer then
     if cutorch then cutorch.synchronize() end
     local time = timer:time().real
