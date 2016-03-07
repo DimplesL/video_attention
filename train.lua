@@ -34,7 +34,7 @@ cmd:option('-lr_decay_factor', 0.5)
 -- Output options
 cmd:option('-print_every', 1)
 cmd:option('-checkpoint_every', 1000)
-cmd:option('-checkpoint_name', 'cv/checkpoint')
+cmd:option('-checkpoint_name', '/data/checkpoints/checkpoint')
 
 -- Benchmark options
 cmd:option('-speed_benchmark', 0)
@@ -67,7 +67,6 @@ else
   -- Memory benchmarking is only supported in CUDA mode
   opt.memory_benchmark = 0
   print 'Running in CPU mode'
-
 end
 
 
@@ -234,15 +233,14 @@ for i = 1, num_iterations do
     utils.write_json(filename, checkpoint)
 
     -- Now save a torch checkpoint with the model
-    -- Cast the model to float before saving so it can be used on CPU
     model:clearState()
-    model:float()
-    --checkpoint.model = model
+    --model:float()
+    checkpoint.model = model
 
     local filename = string.format('%s_%d.t7', opt.checkpoint_name, i)
     paths.mkdir(paths.dirname(filename))
-    torch.save(filename, model)
-    model:type(dtype)
+    torch.save(filename, checkpoint)
+    --model:type(dtype)
     params, grad_params = model:getParameters()
     collectgarbage()
   end

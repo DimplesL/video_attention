@@ -102,7 +102,7 @@ function LM:decode_string(encoded)
   for i = 1, encoded:size(1) do
     local idx = encoded[i]
     local token = self.idx_to_token[idx]
-    s = s .. token
+    s = s .." ".. token
   end
   return s
 end
@@ -114,39 +114,31 @@ underlying RNNs.
 
 Inputs:
 - init: String of length T0
-- max_length: Number of characters to sample
+- length: Number of characters to sample
 
 Returns:
-- sampled: (1, max_length) array of integers, where the first part is init.
+- sampled: (1, length) array of integers, where the first part is init.
 --]]
 function LM:sample(kwargs)
   local T = utils.get_kwarg(kwargs, 'length', 100)
-  local start_text = utils.get_kwarg(kwargs, 'start_text', '')
+  --local start_text = utils.get_kwarg(kwargs, 'start_text', '')
+
   local verbose = utils.get_kwarg(kwargs, 'verbose', 0)
   local sample = utils.get_kwarg(kwargs, 'sample', 1)
   local temperature = utils.get_kwarg(kwargs, 'temperature', 1)
+  local h0 = utils.get_kwarg(kwargs, 'h0', torch.zeros(self.rnn_size))
 
   local sampled = torch.LongTensor(1, T)
-  self:resetStates()
+  self:setStates(h0)
 
   local scores, first_t
-  if #start_text > 0 then
-    if verbose > 0 then
-      print('Seeding with: "' .. start_text .. '"')
-    end
-    local x = self:encode_string(start_text):view(1, -1)
-    local T0 = x:size(2)
-    sampled[{{}, {1, T0}}]:copy(x)
-    scores = self:forward(x)[{{}, {T0, T0}}]
-    first_t = T0 + 1
-  else
-    if verbose > 0 then
-      print('Seeding with uniform probabilities')
-    end
-    local w = self.net:get(1).weight
-    scores = w.new(1, 1, self.vocab_size):fill(1)
-    first_t = 1
-  end
+  -- local x = self:encode_string(start_text):view(1, -1)
+  --print(self.token_to_idx)
+  local x = torch.LongTensor(1):fill(self.token_to_idx["<START>"]):view(1,-1)
+  local T0 = 1
+  sampled[{{}, {1, T0}}]:copy(x)
+  scores = self:forward(x)[{{}, {T0, T0}}]
+  first_t = T0 + 1
   
   for t = first_t, T do
     if sample == 0 then

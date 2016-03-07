@@ -1,0 +1,10 @@
+/data/coco/test2014/COCO_test2014_000000055967_f1.npy
+/data/coco/test2014/COCO_test2014_000000308239_f1.npy
+/data/coco/test2014/COCO_test2014_000000518285_f1.npy
+/data/coco/test2014/COCO_test2014_000000118596_f1.npy
+/data/coco/test2014/COCO_test2014_000000510634_f1.npy
+/data/coco/test2014/COCO_test2014_000000005242_f1.npy
+/data/coco/test2014/COCO_test2014_000000443158_f1.npy
+/data/coco/test2014/COCO_test2014_000000235755_f1.npy
+/data/coco/test2014/COCO_test2014_000000559802_f1.npy
+/data/coco/test2014/COCO_test2014_000000344532_f1.npy
