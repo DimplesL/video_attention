@@ -67,6 +67,7 @@ else
   -- Memory benchmarking is only supported in CUDA mode
   opt.memory_benchmark = 0
   print 'Running in CPU mode'
+
 end
 
 
@@ -109,15 +110,25 @@ local function f(w)
   -- Get a minibatch and run the model forward, maybe timing it
   local timer
   local feats, y = loader:nextBatch('train')
+  assert(opt.rnn_size == feats:size()[2])
+  -- load features and raw caption 
   feats, y = feats:type(dtype), y:type(dtype)
-  local start = torch.tensor(y:size()[1]):fill(vocab['token_to_idx']['<START>'])
-  local X = torch.cat(start,y,2)
-   
+  -- create a column vector with start vector
+  local start = torch.Tensor(y:size()[1]):fill(vocab['token_to_idx']['<START>'])
+  start = start:type(dtype)
+  -- prepend start vector to caption, and remove last token
+  local X = torch.cat(start,y,2)[{{},{1,-2}}]
+  X = X:type(dtype)
+  X:add(1)
+  y:add(1)
+  
+  assert(opt.seq_length == X:size()[2])
   if opt.speed_benchmark == 1 then
     if cutorch then cutorch.synchronize() end
     timer = torch.Timer()
   end
-  -- XXX should initialize hidden state here
+
+  model:setStates(feats)
   local scores = model:forward(X)
 
   -- Use the Criterion to compute loss; we need to reshape the scores to be
@@ -190,30 +201,30 @@ for i = 1, num_iterations do
     -- Evaluate loss on the validation set. Note that we reset the state of
     -- the model; this might happen in the middle of an epoch, but that
     -- shouldn't cause too much trouble.
-    model:evaluate()
-    model:resetStates()
-    local num_val = loader.split_sizes['val']
-    local val_loss = 0
-    for j = 1, num_val do
-      local xv, yv = loader:nextBatch('val')
-      xv = xv:type(dtype)
-      yv = yv:type(dtype):view(N * T)
-      local scores = model:forward(xv):view(N * T, -1)
-      val_loss = val_loss + crit:forward(scores, yv)
-    end
-    val_loss = val_loss / num_val
-    print('val_loss = ', val_loss)
-    table.insert(val_loss_history, val_loss)
-    table.insert(val_loss_history_it, i)
-    model:resetStates()
-    model:training()
+    --model:evaluate()
+    --model:resetStates()
+    --local num_val = loader.split_sizes['val']
+    --local val_loss = 0
+    --for j = 1, num_val do
+      --local xv, yv = loader:nextBatch('val')
+      --xv = xv:type(dtype)
+      --yv = yv:type(dtype):view(N * T)
+      --local scores = model:forward(xv):view(N * T, -1)
+      --val_loss = val_loss + crit:forward(scores, yv)
+    --end
+    --val_loss = val_loss / num_val
+    --print('val_loss = ', val_loss)
+    --table.insert(val_loss_history, val_loss)
+    --table.insert(val_loss_history_it, i)
+    --model:resetStates()
+    --model:training()
 
     -- First save a JSON checkpoint, excluding the model
     local checkpoint = {
       opt = opt,
       train_loss_history = train_loss_history,
-      val_loss_history = val_loss_history,
-      val_loss_history_it = val_loss_history_it,
+      --val_loss_history = val_loss_history,
+      --val_loss_history_it = val_loss_history_it,
       forward_backward_times = forward_backward_times,
       memory_usage = memory_usage,
     }
@@ -226,10 +237,11 @@ for i = 1, num_iterations do
     -- Cast the model to float before saving so it can be used on CPU
     model:clearState()
     model:float()
-    checkpoint.model = model
+    --checkpoint.model = model
+
     local filename = string.format('%s_%d.t7', opt.checkpoint_name, i)
     paths.mkdir(paths.dirname(filename))
-    torch.save(filename, checkpoint)
+    torch.save(filename, model)
     model:type(dtype)
     params, grad_params = model:getParameters()
     collectgarbage()

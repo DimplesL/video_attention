@@ -42,7 +42,7 @@ function LM:__init(kwargs)
     elseif self.model_type == 'lstm' then
       rnn = nn.LSTM(prev_dim, H)
     end
-    rnn.remember_states = true
+    rnn.remember_states = false
     table.insert(self.rnns, rnn)
     self.net:add(rnn)
     if self.batchnorm == 1 then
@@ -76,6 +76,11 @@ function LM:resetStates()
   for i, rnn in ipairs(self.rnns) do
     rnn:resetStates()
   end
+end
+
+function LM:setStates(h0)
+   self:resetStates()
+   self.rnns[1]:setHidden(h0)
 end
 
 

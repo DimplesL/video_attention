@@ -58,6 +58,10 @@ function layer:resetStates()
   self.h0 = self.h0.new()
 end
 
+function layer:setHidden(h0)
+  self.h0:copy(h0)
+end
+
 
 function layer:_unpack_input(input)
   local h0, x = nil, nil

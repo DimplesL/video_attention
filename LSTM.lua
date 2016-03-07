@@ -62,6 +62,10 @@ function layer:resetStates()
   self.c0 = self.c0.new()
 end
 
+function layer:setHidden(h0)
+  self.h0 = h0:clone()
+end
+
 
 local function check_dims(x, dims)
   assert(x:dim() == #dims)
