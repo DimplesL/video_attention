@@ -88,10 +88,13 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
         x = x:type(dtype)
 
         -- Forward pass
-        local vocab_scores = model:forward(x):view(N * T, -1)
+        local vocab_scores = model:forward(x)
+
+	-- Load the ground truth captions
+	--TODO
 
         -- Convert the scores to words
-        --TODO
+	_, pred = torch.max(x, 3)
 
         -- Accumulate the BLEUscore
         score = score + idxBleu(pred, truth)
