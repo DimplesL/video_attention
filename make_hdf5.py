@@ -20,6 +20,7 @@ parser.add_argument('--train_dir', default='/data/coco/train2014')
 parser.add_argument('--val_dir', default='/data/coco/val2014')
 parser.add_argument('--output_h5', default='/data/coco/coco.h5')
 parser.add_argument('--output_json', default='/data/coco/coco_vocab.json')
+parser.add_argument('--dont_average', action='store_true')
 parser.add_argument('--subsample_percent', default=1.0)
 parser.add_argument('--vocab_size', default=2048)
 args = parser.parse_args()
@@ -35,29 +36,38 @@ num_test = len(test_files)
 test_names = h5.create_dataset('test_names', shape=(num_test,), dtype="S10")
 
 # Populate the test dataset
-feat_len = None
+feat_shape = None
 test_dset = None
 for i,fname in enumerate(test_files):
-  feats = np.load(fname).mean(axis=(1,2)).squeeze()
-  if feat_len is None:
-	# Get the length of a feature from the first file
-	feat_len = feats.shape[0]
-	test_dset = h5.create_dataset('test_feats', shape=(num_test,feat_len))
-	print "Detected feature length %d from file %s" % (feat_len, fname)
-  assert(len(feats.shape) == 1)
-  assert(feat_len == feats.shape[0])
+  feats = np.load(fname)
+  if not args.dont_average:
+    feats = feats.mean(axis=(1,2)).squeeze()
+  if feat_shape is None:
+    # Get the length of a feature from the first file
+    feat_shape = feats.shape
+    data_shape = (num_test,) + feat_shape
+    test_dset = h5.create_dataset('test_feats', shape=data_shape)
+    print "Detected feature shape %s from file %s" % (feat_shape, fname)
+  if not args.dont_average:
+    assert(len(feats.shape) == 1)
+  else:
+    assert(len(feats.shape) == 3)
   test_dset[i] = feats
   test_names[i] = fname
   if i % 1000 == 0:
-	print "Adding feature %d to test dataset" % (i)
+	print "Added %d of %d features to test dataset" % (i,num_test)
 
 print "Loading captions json..."
 trainf = open(args.train_json)
 valf = open(args.val_json)
 train_json = json.load(trainf)
 val_json = json.load(valf)
-train_cs = np.random.choice(train_json['annotations'],size=math.floor(float(args.subsample_percent)*len(train_json['annotations'])),replace=False)
-val_cs = np.random.choice(val_json['annotations'],size=math.floor(float(args.subsample_percent)*len(val_json['annotations'])),replace=False)
+train_cs = np.random.choice(train_json['annotations'],
+                            size=math.floor(float(args.subsample_percent)*len(train_json['annotations'])),
+                            replace=False)
+val_cs = np.random.choice(val_json['annotations'],
+                          size=math.floor(float(args.subsample_percent)*len(val_json['annotations'])),
+                          replace=False)
 # subsample json files
 
 captions = {'train':defaultdict(list), 'val':defaultdict(list)}
@@ -156,8 +166,10 @@ print "Writing hd5"
 # dataset will be N x max_caption_length
 num_train = num_capts['train']
 num_val = num_capts['val']
-train_feats = h5.create_dataset('train_feats', shape=(num_train,feat_len))
-val_feats = h5.create_dataset('val_feats', shape=(num_val,feat_len))
+train_data_shape = (num_train,) + feat_shape
+val_data_shape = (num_val,) + feat_shape
+train_feats = h5.create_dataset('train_feats', shape=train_data_shape)
+val_feats = h5.create_dataset('val_feats', shape=val_data_shape)
 train_names = h5.create_dataset('train_names', shape=(num_train,), dtype="S10")
 val_names = h5.create_dataset('val_names', shape=(num_val,), dtype="S10")
 train_captions = h5.create_dataset('train_captions', shape=(num_train,max_caption_length),dtype='i4')
@@ -182,12 +194,15 @@ for dset_name,dset_capts in idx_captions.iteritems():
 
     # Try to load the file
     try:
-      feats = np.load(fname).mean(axis=(1,2))
+      feats = np.load(fname)
+      if not args.dont_average: feats = feats.mean(axis=(1,2))
     except:
       print "ERROR, unable to load features: %s, shape: %s" % (fname,np.load(fname).shape)
       exit(1)
-    assert(len(feats.shape) == 1)
-    assert(feat_len == feats.shape[0])
+    if not args.dont_average:
+      assert(len(feats.shape) == 1)
+    else:
+      assert(len(feats.shape) == 3)
 
     # Add each caption to the map/dataset
     for caption in im_captions:
@@ -210,4 +225,3 @@ for dset_name,dset_capts in idx_captions.iteritems():
 # Add the maps to the h5 file
 for dset_name, dset_map in maps.iteritems():
 	h5.create_dataset(dset_name + '_map', data=dset_map)
-
