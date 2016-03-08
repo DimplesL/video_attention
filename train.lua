@@ -28,13 +28,13 @@ cmd:option('-batchnorm', 0)
 cmd:option('-max_epochs', 50)
 cmd:option('-learning_rate', 2e-3)
 cmd:option('-grad_clip', 5)
-cmd:option('-lr_decay_every', 5)
+cmd:option('-lr_decay_every', 1)
 cmd:option('-lr_decay_factor', 0.5)
 
 -- Output options
 cmd:option('-print_every', 1)
 cmd:option('-checkpoint_every', 1000)
-cmd:option('-checkpoint_name', 'cv/checkpoint')
+cmd:option('-checkpoint_name', '/data/checkpoints/checkpoint')
 
 -- Benchmark options
 cmd:option('-speed_benchmark', 0)
@@ -67,7 +67,6 @@ else
   -- Memory benchmarking is only supported in CUDA mode
   opt.memory_benchmark = 0
   print 'Running in CPU mode'
-
 end
 
 
@@ -76,7 +75,7 @@ local loader = DataLoader(opt)
 local vocab = utils.read_json(opt.input_json)
 local idx_to_token = {}
 for k, v in pairs(vocab.idx_to_token) do
-  idx_to_token[tonumber(k)] = v
+  idx_to_token[tonumber(k)+1] = v
 end
 
 -- Initialize the model and criterion
@@ -109,27 +108,21 @@ local function f(w)
 
   -- Get a minibatch and run the model forward, maybe timing it
   local timer
-  local feats, y = loader:nextBatch('train')
+  local feats, capts = loader:nextBatch('train')
   assert(opt.rnn_size == feats:size()[2])
   -- load features and raw caption 
-  feats, y = feats:type(dtype), y:type(dtype)
-  -- create a column vector with start vector
-  local start = torch.Tensor(y:size()[1]):fill(vocab['token_to_idx']['<START>'])
-  start = start:type(dtype)
-  -- prepend start vector to caption, and remove last token
-  local X = torch.cat(start,y,2)[{{},{1,-2}}]
-  X = X:type(dtype)
-  X:add(1)
-  y:add(1)
+  feats, capts = feats:type(dtype), capts:type(dtype)
+  capts:add(1)
   
-  assert(opt.seq_length == X:size()[2])
   if opt.speed_benchmark == 1 then
     if cutorch then cutorch.synchronize() end
     timer = torch.Timer()
   end
 
-  model:setStates(feats)
-  local scores = model:forward(X)
+  X = capts[{{},{1,-2}}]:clone()
+  y = capts[{{},{2,-1}}]:clone()
+  model:resetStates()
+  local scores = model:forward({feats,X})
 
   -- Use the Criterion to compute loss; we need to reshape the scores to be
   -- two-dimensional before doing so. Annoying.
@@ -139,7 +132,7 @@ local function f(w)
 
   -- Run the Criterion and model backward to compute gradients, maybe timing it
   local grad_scores = crit:backward(scores_view, y_view):view(N, T, -1)
-  model:backward(X, grad_scores)
+  model:backward(X, grad_scores,nil)
   if timer then
     if cutorch then cutorch.synchronize() end
     local time = timer:time().real
@@ -190,8 +183,8 @@ for i = 1, num_iterations do
   table.insert(train_loss_history, loss[1])
   if opt.print_every > 0 and i % opt.print_every == 0 then
     local float_epoch = i / num_train + 1
-    local msg = 'Epoch %.2f / %d, i = %d / %d, loss = %f'
-    local args = {msg, float_epoch, opt.max_epochs, i, num_iterations, loss[1]}
+    local msg = 'Epoch %.2f / %d, i = %d / %d, lr= %f, loss = %f'
+    local args = {msg, float_epoch, opt.max_epochs, i, num_iterations, optim_config.learningRate, loss[1]}
     print(string.format(unpack(args)))
   end
 
@@ -234,15 +227,14 @@ for i = 1, num_iterations do
     utils.write_json(filename, checkpoint)
 
     -- Now save a torch checkpoint with the model
-    -- Cast the model to float before saving so it can be used on CPU
     model:clearState()
-    model:float()
-    --checkpoint.model = model
+    --model:float()
+    checkpoint.model = model
 
     local filename = string.format('%s_%d.t7', opt.checkpoint_name, i)
     paths.mkdir(paths.dirname(filename))
-    torch.save(filename, model)
-    model:type(dtype)
+    torch.save(filename, checkpoint)
+    --model:type(dtype)
     params, grad_params = model:getParameters()
     collectgarbage()
   end

@@ -1,0 +1,10 @@
+/data/coco/train2014/COCO_train2014_000000564978_f1.npy
+/data/coco/train2014/COCO_train2014_000000510366_f1.npy
+/data/coco/train2014/COCO_train2014_000000495905_f1.npy
+/data/coco/train2014/COCO_train2014_000000400742_f1.npy
+/data/coco/train2014/COCO_train2014_000000426568_f1.npy
+/data/coco/train2014/COCO_train2014_000000181344_f1.npy
+/data/coco/train2014/COCO_train2014_000000367716_f1.npy
+/data/coco/train2014/COCO_train2014_000000395742_f1.npy
+/data/coco/train2014/COCO_train2014_000000178672_f1.npy
+/data/coco/train2014/COCO_train2014_000000144349_f1.npy

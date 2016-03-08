@@ -53,14 +53,17 @@ function layer:reset(std)
   return self
 end
 
+function layer:rememberStates(val)
+  self.remember_states = val
+end
 
 function layer:resetStates()
   self.h0 = self.h0.new()
 end
 
-function layer:setHidden(h0)
-  self.h0:copy(h0)
-end
+--function layer:setHidden(h0)
+--  self.h0:copy(h0)
+--end
 
 
 function layer:_unpack_input(input)

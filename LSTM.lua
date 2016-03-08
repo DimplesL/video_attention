@@ -56,15 +56,18 @@ function layer:reset(std)
   return self
 end
 
+function layer:rememberStates(val)
+  self.remember_states = val
+end
 
 function layer:resetStates()
   self.h0 = self.h0.new()
   self.c0 = self.c0.new()
 end
 
-function layer:setHidden(h0)
-  self.h0 = h0:clone()
-end
+--function layer:setHidden(h0)
+--  self.h0 = h0:clone()
+--end
 
 
 local function check_dims(x, dims)
