@@ -1,13 +1,13 @@
 th train.lua -input_h5 /data/coco/small_coco.h5 \
              -input_json /data/coco/small_coco_vocab.json \
-             -gpu 0 \
-             -batch_size 16 \
+             -gpu 1 \
+             -batch_size 64 \
              -seq_length 45 \
              -model_type "lstm" \
              -wordvec_size 512 \
              -rnn_size 2048 \
              -num_layers 2 \
-             -learning_rate 0.001 \
+             -learning_rate 0.0005 \
              -checkpoint_every 250 \
-             -lr_decay_every 2 \
+             -lr_decay_every 5 \
              -max_epochs 500 
