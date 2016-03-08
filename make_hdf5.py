@@ -20,8 +20,8 @@ parser.add_argument('--train_dir', default='/data/coco/train2014')
 parser.add_argument('--val_dir', default='/data/coco/val2014')
 parser.add_argument('--output_h5', default='/data/coco/coco2.h5')
 parser.add_argument('--output_json', default='/data/coco/coco_vocab2.json')
-parser.add_argument('--subsample_percent', default=0.05)
-parser.add_argument('--vocab_size', default=1000)
+parser.add_argument('--subsample_percent', default=1.0)
+parser.add_argument('--vocab_size', default=2048)
 args = parser.parse_args()
 
 h5 = h5py.File(args.output_h5, "w")
@@ -58,8 +58,6 @@ train_json = json.load(trainf)
 val_json = json.load(valf)
 train_cs = np.random.choice(train_json['annotations'],size=math.floor(float(args.subsample_percent)*len(train_json['annotations'])),replace=False)
 val_cs = np.random.choice(val_json['annotations'],size=math.floor(float(args.subsample_percent)*len(val_json['annotations'])),replace=False)
-for ann in train_cs:
-  print ann['image_id']
 # subsample json files
 
 captions = {'train':defaultdict(list), 'val':defaultdict(list)}

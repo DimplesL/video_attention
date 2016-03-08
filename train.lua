@@ -75,6 +75,8 @@ local loader = DataLoader(opt)
 local vocab = utils.read_json(opt.input_json)
 local idx_to_token = {}
 for k, v in pairs(vocab.idx_to_token) do
+  -- NOTE that lua is 1- indexed while python is 0-indexed
+  -- so we add one to translate
   idx_to_token[tonumber(k)+1] = v
 end
 
@@ -121,6 +123,8 @@ local function f(w)
 
   X = capts[{{},{1,-2}}]:clone()
   y = capts[{{},{2,-1}}]:clone()
+  assert(X:size(2)==opt.seq_length,"Sequence length doesn't match the supplied captions")
+  assert(y:size(2)==opt.seq_length,"Sequence length doesn't match the supplied captions")
   model:resetStates()
   local scores = model:forward({feats,X})
 
