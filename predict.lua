@@ -32,8 +32,9 @@ checkpoint = torch.load(opt.checkpoint)
 model = checkpoint.model
 
 for line in io.lines(opt.images) do
+  print(line)
   local feat = np.loadnpy(line):type('torch.CudaTensor')
-  feat = feat:mean(2):mean(3):reshape(2048)
-  sample = model:sample({length=opt.sample_length,h0=feat,verbose=true})
+  feat = feat:mean(2):mean(3):reshape(1,2048)
+  sample = model:sample({length=opt.sample_length,h0=feat})
   print(sample)
 end

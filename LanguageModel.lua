@@ -32,7 +32,7 @@ function LM:__init(kwargs)
   self.rnns = {}
   self.net = nn.Sequential()
 
-  self.net:add(nn.LookupTable(V, D))
+  self.lookup = nn.LookupTable(V, D)
   for i = 1, self.num_layers do
     local prev_dim = H
     if i == 1 then prev_dim = D end
@@ -58,29 +58,65 @@ end
 
 
 function LM:updateOutput(input)
-  return self.net:forward(input)
+  -- unpack h0 and x
+  local h0, x = nil, nil
+  if torch.type(input) == 'table' and #input == 2 then
+    h0, x = unpack(input)
+  elseif torch.isTensor(input) then
+    x = input
+  else
+    assert(false,"invalid input")
+  end
+  -- forward through the lookup layer
+  local out = self.lookup:forward(x)
+  -- package h0 with out from lookup
+  self.rnn_input = {h0,out}
+  -- call forward on rest of net
+  return self.net:forward(self.rnn_input)
 end
 
 
 function LM:backward(input, gradOutput, scale)
-  return self.net:backward(input, gradOutput, scale)
+  -- run backward through rnns, using saved output of lookup table
+  local out = self.net:backward(self.rnn_input, gradOutput, scale)
+  local grad_h0 = out[1]
+  local grad_rnn = out[2]
+  -- run backwards through lookup, using true input
+  return self.lookup:backward(input, grad_rnn, scale)
 end
 
 
 function LM:parameters()
-  return self.net:parameters()
+  local function tinsert(to, from)
+    if type(from) == 'table' then
+      for i=1,#from do
+        tinsert(to,from[i])
+      end
+    else
+      table.insert(to,from)
+    end
+  end
+  local w = {}
+  local gw = {}
+  local mw,mgw = self.lookup:parameters()
+  if mw then
+    tinsert(w,mw)
+    tinsert(gw,mgw)
+  end
+  for i=1,#self.net.modules do
+    local mw,mgw = self.net.modules[i]:parameters()
+    if mw then
+      tinsert(w,mw)
+      tinsert(gw,mgw)
+    end
+  end
+  return w,gw
 end
-
 
 function LM:resetStates()
   for i, rnn in ipairs(self.rnns) do
     rnn:resetStates()
   end
-end
-
-function LM:setStates(h0)
-   self:resetStates()
-   self.rnns[1]:setHidden(h0)
 end
 
 
@@ -101,8 +137,8 @@ function LM:decode_string(encoded)
   local s = ''
   for i = 1, encoded:size(1) do
     local idx = encoded[i]
-    local token = self.idx_to_token[idx]
-    s = s .." ".. token
+    local token = self.idx_to_token[idx-1]
+    s = s .. " " .. token
   end
   return s
 end
@@ -120,40 +156,38 @@ Returns:
 - sampled: (1, length) array of integers, where the first part is init.
 --]]
 function LM:sample(kwargs)
+  -- max length of caption
   local T = utils.get_kwarg(kwargs, 'length', 100)
-  --local start_text = utils.get_kwarg(kwargs, 'start_text', '')
-
-  local verbose = utils.get_kwarg(kwargs, 'verbose', 0)
-  local sample = utils.get_kwarg(kwargs, 'sample', 1)
-  local temperature = utils.get_kwarg(kwargs, 'temperature', 1)
+  -- initial hidden state (image features)
   local h0 = utils.get_kwarg(kwargs, 'h0', torch.zeros(self.rnn_size))
-
+  -- array holding sampled caption
   local sampled = torch.LongTensor(1, T)
-  self:setStates(h0)
-
-  local scores, first_t
-  -- local x = self:encode_string(start_text):view(1, -1)
-  --print(self.token_to_idx)
-  local x = torch.LongTensor(1):fill(self.token_to_idx["<START>"]):view(1,-1)
-  local T0 = 1
-  sampled[{{}, {1, T0}}]:copy(x)
-  scores = self:forward(x)[{{}, {T0, T0}}]
-  first_t = T0 + 1
-  
-  for t = first_t, T do
-    if sample == 0 then
-      local _, next_char = scores:max(3)
-      next_char = next_char[{{}, {}, 1}]
-    else
-       local probs = torch.div(scores, temperature):double():exp():squeeze()
-       probs:div(torch.sum(probs))
-       next_char = torch.multinomial(probs, 1):view(1, 1)
-    end
-    sampled[{{}, {t, t}}]:copy(next_char)
-    scores = self:forward(next_char)
-  end
-
+  -- storage for scores and 
+  local scores
+  -- reset hidden and cell states
   self:resetStates()
+  -- remember hidden and cell states between calls to forward
+  for i, rnn in ipairs(self.rnns) do
+    rnn:rememberStates(true)
+  end
+  -- get start token
+  local x = torch.LongTensor(1):fill(self.token_to_idx["<START>"]):view(1,-1)
+  -- first forward pass
+  scores = self:forward({h0,x})[{{}, {1, 1}}]
+  for t = 1, T do
+    -- get the NxTxV (in this case 1x1xV) scores and take the argmax
+    local _, next_word = scores:max(3)
+    -- unpack the next word
+    next_word = next_word[{{}, {}, 1}]
+    -- copy the word into sampled
+    sampled[{{}, {t, t}}]:copy(next_word)
+    -- forward again with the sampled word
+    scores = self:forward(next_word)
+  end
+  self:resetStates()
+  for i, rnn in ipairs(self.rnns) do
+    rnn:rememberStates(false)
+  end
   return self:decode_string(sampled[1])
 end
 

@@ -1,5 +1,5 @@
-th train.lua -input_h5 /data/coco/coco.h5 \
-             -input_json /data/coco/coco_vocab.json \
+th train.lua -input_h5 /data/coco/small_coco.h5 \
+             -input_json /data/coco/small_coco_vocab.json \
              -gpu 0 \
              -batch_size 50 \
              -seq_length 49 \
