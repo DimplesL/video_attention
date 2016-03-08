@@ -188,7 +188,7 @@ function LM:sample(kwargs)
   for i, rnn in ipairs(self.rnns) do
     rnn:rememberStates(false)
   end
-  return self:decode_string(sampled[1])
+  return sampled[1]
 end
 
 

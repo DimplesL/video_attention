@@ -1,4 +1,6 @@
 require 'torch'
+require 'LanguageModel'
+require 'hdf5'
 
 bleu = {}
 
@@ -21,19 +23,19 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
 --   h5name: The name of the .h5 file containing the data
 --   split: Either bleu.split.train or bleu.split.val
 --   mode: Either bleu.cpu, bleu.cuda, or bleu.cl
---   device: The device number to use, e.g. 0 for GPU 0.
+--   device: The device number to use, e.g. 1 for GPU 1.
 --
 -- Returns a number giving the average bleu score per caption.
 
     -- Choose a torch datatype and computing backend
     local dtype = 'torch.FloatTensor'
-    if opt.gpu >= 0 and opt.gpu_backend == 'cuda' then
+    if mode == 'cuda' then
         require 'cutorch'
         require 'cunn'
         cutorch.setDevice(device)
         dtype = 'torch.CudaTensor'
         print(string.format('Running BLEU with CUDA on GPU %d', device))   
-    elseif opt.gpu >= 0 and opt.gpu_backend == 'opencl' then
+    elseif mode == 'cl' then
         require 'cltorch'
         require 'clnn'
         cltorch.setDevice(device)
@@ -44,19 +46,17 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
         print 'Running BLEU in CPU mode'
     end
 
-    -- Load the checkpoint and model
-    local checkpoint = torch.load(opt.checkpoint)
-    local model = checkpoint.model
-    model:type(dtype)
+    -- Convert the model to the appropriate type
+    local model = checkpoint.model:type(dtype)
     local crit = nn.CrossEntropyCriterion():type(dtype)
 
     -- Mangle some strings
-    local map_dset_name = split + '_map'
-    local feat_dset_name = split + '_feats'
-    local captions_dset_name = split + '_captions'
+    local map_dset_name = split..'_map'
+    local feat_dset_name = split..'_feats'
+    local captions_dset_name = split..'_captions'
 
     -- Open the h5 file and datasets
-    local f = hdf5.open(h5_file, 'r')
+    local f = hdf5.open(h5name, 'r')
     local map_dset = f:read(map_dset_name) 
     local feat_dset = f:read(feat_dset_name)
     local captions_dset = f:read(captions_dset_name)
@@ -75,61 +75,58 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
     local score = 0
     for i=1,num_imgs do 
         -- Print our progress
-        if i % 100 = 0 then
+        if i % 100 == 0 then
             print(string.format('Computing BLEU for image %d'), i)
         end
 
         -- Load the caption indices for this image
-        local capt_idxs = map_dset:partial({i, i}, {1, idxs_per_img})
+        local capt_idxs = torch.totable(map_dset:partial({i, i}, {1, idxs_per_img}))[1]
 
         -- Load the features and convert to Torch's format
-        local feat_idx = capt_idxs[0] + 1
-        local x = feat_dset:partial({feat_idx, feat_idx},{1, self.feat_len})
-        x = x:type(dtype)
+        local feat_idx = capt_idxs[1] + 1
+        local x = feat_dset:partial({feat_idx, feat_idx},{1, feat_len})
+        x = x:type(dtype):reshape(1, feat_len)
 
-        -- Forward pass
-        local vocab_scores = model:forward(x)
-
-        -- Convert the scores to words
-        local _, pred = vocab_scores:max(3)
-            pred = pred[{{}, {}, 1}]
+	-- Predict
+  	local pred = torch.totable(model:sample({length=capt_len,h0=x}):reshape(1, capt_len))[1]
 
         -- Load the ground truth captions
         local truth = {}
-        for capt_idx in capt_idxs do
+        for _,capt_idx in pairs(capt_idxs) do
             -- Convert to 1-indexing
             capt_1idx = capt_idx + 1
 
             -- Load the caption
-            truth{#truth + 1} = captions_dset:partial({capt_1idx,capt_1idx},{1,capt_len})
+            truth[#truth + 1] = torch.totable(captions_dset:partial({capt_1idx,capt_1idx},{1,capt_len}))[1]
         end
 
         -- Accumulate the BLEU score
-        score = score + idxBleu(pred, truth)
+        score = score + bleu.idxBleu(pred, truth)
     end
 
     return score / num_imgs
+end
 
 function bleu.idxBleu(pred, truth)
 --Internal function to compute the BLEU score given two tables of tokens. pred
 --contains the predicted tokens, truth is a table, each element of which is a ground truth caption
     
     -- Strip both pred and truth of fluff tokens
-    pred = stripCapt(pred)
+    pred = bleu.stripCapt(pred)
     for idx, capt in pairs(truth) do
-	truth[idx] = stripCapt(capt)
+	truth[idx] = bleu.stripCapt(capt)
     end
 
     -- Count the max occurence of each n-gram in any ground truth caption
-    truthGrams = {}
-    for capt in truth do
+    local truthGrams = {}
+    for _,capt in pairs(truth) do
 	-- Count the n-grams for this caption
-	captGrams = {}
-        for tok in capt do	
+	local captGrams = {}
+        for _,tok in pairs(capt) do	
 	   if captGrams[tok] == nil then
 	       captGrams[tok] = 1
 	   else
-	       CaptGrams[tok] = captGrams[tok] + 1
+	       captGrams[tok] = captGrams[tok] + 1
 	   end
 	end
 
@@ -138,14 +135,14 @@ function bleu.idxBleu(pred, truth)
 	    if truthGrams[tok] == nil then
 		truthGrams[tok] = count
 	    else
-	    	truthGrams[tok] = max(truthGrams[tok], count)
+	    	truthGrams[tok] = math.max(truthGrams[tok], count)
 	    end
 	end
     end
 
     -- Count the matched n-grams from the predicted caption
-    matchedGrams = {}
-    for tok in pred do
+    local matchedGrams = {}
+    for _,tok in pairs(pred) do
         if truthGrams[tok] ~= nil then
             if matchedGrams[tok] == nil then
                 matchedGrams[tok] = 1
@@ -156,13 +153,13 @@ function bleu.idxBleu(pred, truth)
     end
 
     -- Tally the bleu score by restricting the matches to truthGrams
-    bleuMatched = 0
+    local bleuMatched = 0
     for tok, count in pairs(matchedGrams) do
-	bleuMatched = bleuMatched + min(count, truthGrams[tok])
+	bleuMatched = bleuMatched + math.min(count, truthGrams[tok])
     end
 
-    return bleuMatched:type(float) / #pred
-
+    return bleuMatched / #pred
+end
 
 function bleu.stripCapt(capt)
 -- Internal function to strip a table of fluff tokens. Warning: this assumes any token less than or equal to fluffTok is fluff.
@@ -171,11 +168,12 @@ function bleu.stripCapt(capt)
     local fluffTok = 3
 
     -- Rebuild the caption out-of-place
-    stripped = {}
-    for tok in capt do
+    local stripped = {}
+    for _,tok in pairs(capt) do
 	if tok > fluffTok then
 	    stripped[#stripped + 1] = tok
 	end
     end
 
     return stripped
+end
