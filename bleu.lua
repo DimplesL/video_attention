@@ -75,7 +75,7 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
     local score = 0
     for i=1,num_imgs do 
         -- Print our progress
-        if i % 100 = 0 do
+        if i % 100 = 0 then
             print(string.format('Computing BLEU for image %d'), i)
         end
 
@@ -90,17 +90,92 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
         -- Forward pass
         local vocab_scores = model:forward(x)
 
-	-- Load the ground truth captions
-	--TODO
-
         -- Convert the scores to words
-	_, pred = torch.max(x, 3)
+        local _, pred = vocab_scores:max(3)
+            pred = pred[{{}, {}, 1}]
 
-        -- Accumulate the BLEUscore
+        -- Load the ground truth captions
+        local truth = {}
+        for capt_idx in capt_idxs do
+            -- Convert to 1-indexing
+            capt_1idx = capt_idx + 1
+
+            -- Load the caption
+            truth{#truth + 1} = captions_dset:partial({capt_1idx,capt_1idx},{1,capt_len})
+        end
+
+        -- Accumulate the BLEU score
         score = score + idxBleu(pred, truth)
     end
 
     return score / num_imgs
 
-function idxBleu(pred, truth)
---TODO
+function bleu.idxBleu(pred, truth)
+--Internal function to compute the BLEU score given two tables of tokens. pred
+--contains the predicted tokens, truth is a table, each element of which is a ground truth caption
+    
+    -- Strip both pred and truth of fluff tokens
+    pred = stripCapt(pred)
+    for idx, capt in pairs(truth) do
+	truth[idx] = stripCapt(capt)
+    end
+
+    -- Count the max occurence of each n-gram in any ground truth caption
+    truthGrams = {}
+    for capt in truth do
+	-- Count the n-grams for this caption
+	captGrams = {}
+        for tok in capt do	
+	   if captGrams[tok] == nil then
+	       captGrams[tok] = 1
+	   else
+	       CaptGrams[tok] = captGrams[tok] + 1
+	   end
+	end
+
+	-- Compute the maximum n-grams counts across all captions
+	for tok, count in pairs(captGrams) do
+	    if truthGrams[tok] == nil then
+		truthGrams[tok] = count
+	    else
+	    	truthGrams[tok] = max(truthGrams[tok], count)
+	    end
+	end
+    end
+
+    -- Count the matched n-grams from the predicted caption
+    matchedGrams = {}
+    for tok in pred do
+        if truthGrams[tok] ~= nil then
+            if matchedGrams[tok] == nil then
+                matchedGrams[tok] = 1
+            else
+                matchedGrams[tok] = matchedGrams[tok] + 1
+            end
+        end
+    end
+
+    -- Tally the bleu score by restricting the matches to truthGrams
+    bleuMatched = 0
+    for tok, count in pairs(matchedGrams) do
+	bleuMatched = bleuMatched + min(count, truthGrams[tok])
+    end
+
+    return bleuMatched:type(float) / #pred
+
+
+function bleu.stripCapt(capt)
+-- Internal function to strip a table of fluff tokens. Warning: this assumes any token less than or equal to fluffTok is fluff.
+
+    -- HARDCODED tokens less than or equal to this are fluff
+    local fluffTok = 3
+
+    -- Rebuild the caption out-of-place
+    stripped = {}
+    for tok in capt do
+	if tok > fluffTok then
+	    stripped[#stripped + 1] = tok
+	end
+    end
+
+    return stripped
