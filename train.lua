@@ -172,10 +172,9 @@ for i = 1, num_iterations do
 
   -- Check if we are at the end of an epoch
   if i % num_train == 0 then
-    model:resetStates() -- Reset hidden states
 
     -- Maybe decay learning rate
-    if epoch % opt.lr_decay_every == 0 then
+    if i % opt.lr_decay_every == 0 then
       local old_lr = optim_config.learningRate
       optim_config = {learningRate = old_lr * opt.lr_decay_factor}
     end

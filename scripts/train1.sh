@@ -9,6 +9,6 @@ th train.lua -input_h5 /data/coco/coco.h5 \
              -num_layers 1 \
              -learning_rate 0.001 \
              -checkpoint_every 250 \
-             -lr_decay_every 5 \
+             -lr_decay_every 1500 \
              -batchnorm 0\
              -max_epochs 500 
