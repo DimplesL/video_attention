@@ -1,6 +1,7 @@
 require 'torch'
 require 'nn'
-
+require 'cutorch'
+require 'cunn'
 require 'LanguageModel'
 
 
@@ -15,9 +16,6 @@ local opt = cmd:parse(arg)
 local checkpoint = torch.load(opt.checkpoint)
 local model = checkpoint.model
 
-local msg
-require 'cutorch'
-require 'cunn'
 cutorch.setDevice(opt.gpu + 1)
 model:cuda()
 print(string.format('Running with CUDA on GPU %d', opt.gpu))

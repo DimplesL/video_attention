@@ -170,14 +170,9 @@ model:training()
 for i = 1, num_iterations do
   local epoch = math.floor(i / num_train) + 1
 
-  -- Check if we are at the end of an epoch
-  if i % num_train == 0 then
-
-    -- Maybe decay learning rate
-    if i % opt.lr_decay_every == 0 then
-      local old_lr = optim_config.learningRate
-      optim_config = {learningRate = old_lr * opt.lr_decay_factor}
-    end
+  if i % opt.lr_decay_every == 0 then
+    local old_lr = optim_config.learningRate
+    optim_config = {learningRate = old_lr * opt.lr_decay_factor}
   end
 
   -- Take a gradient step and maybe print
