@@ -36,5 +36,5 @@ for line in io.lines(opt.images) do
   local feat = np.loadnpy(line):type('torch.CudaTensor')
   feat = feat:mean(2):mean(3):reshape(1,2048)
   sample = model:sample({length=opt.sample_length,h0=feat})
-  print(sample)
+  print(model:decode_string(sample))
 end
