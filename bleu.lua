@@ -66,6 +66,7 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
     local idxs_per_img = map_dset:dataspaceSize()[2]
     local feat_len = feat_dset:dataspaceSize()[2]
     local capt_len = captions_dset:dataspaceSize()[2]
+    print(string.format('Detected %d images...', num_imgs))
 
     -- Initialize the model
     model:evaluate()
@@ -84,6 +85,10 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
 
         -- Load the features and convert to Torch's format
         local feat_idx = capt_idxs[1] + 1
+	if feat_idx < 1 then
+		print(string.format('WARNING: Invalid map index detected: breaking out at image %d', i))
+		return score / i
+	end
         local x = feat_dset:partial({feat_idx, feat_idx},{1, feat_len})
         x = x:type(dtype):reshape(1, feat_len)
 
