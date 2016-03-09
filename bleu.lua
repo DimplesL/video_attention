@@ -76,7 +76,7 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
     for i=1,num_imgs do 
         -- Print our progress
         if i % 100 == 0 then
-            print(string.format('Computing BLEU for image %d'), i)
+            print(string.format('Computing BLEU for image %d', i))
         end
 
         -- Load the caption indices for this image
@@ -93,6 +93,11 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
         -- Load the ground truth captions
         local truth = {}
         for _,capt_idx in pairs(capt_idxs) do
+	    -- Check for the 'no caption' flag
+	    if capt_idx < 0 then
+		break
+	    end
+
             -- Convert to 1-indexing
             capt_1idx = capt_idx + 1
 
