@@ -1,0 +1,14 @@
+nohup th train.lua -input_h5 /data/coco/coco.h5 \
+             -input_json /data/coco/coco_vocab.json \
+             -gpu 0 \
+             -batch_size 64\
+             -seq_length 51 \
+             -model_type "lstm" \
+             -wordvec_size 1024 \
+             -rnn_size 2048 \
+             -num_layers 2 \
+             -learning_rate 0.001 \
+             -checkpoint_every 250 \
+             -checkpoint_name /data/checkpoints/64_1024_2_2500 \
+             -lr_decay_every 2500 \
+             -max_epochs 500 > train3.log &

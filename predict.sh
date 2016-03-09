@@ -1,5 +1,5 @@
-th predict.lua -images train_images.txt \
-               -checkpoint /data/checkpoints/checkpoint_2500.t7 \
-               -input_json /data/coco/small_coco_vocab.json \
-               -sample_length 45 \
-               -gpu 2
+th predict.lua -images bigger_ims \
+               -checkpoint /data/checkpoints/64_1536_2_2500_10000.t7\
+               -input_json /data/coco/coco_vocab.json \
+               -sample_length 51 \
+               -gpu 3

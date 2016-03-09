@@ -1,7 +1,0 @@
-decrease every: 500, 1000, 2000
-start lr:  0.001, 0.0005
-batch size: 16 32 64
-wordvec: 1024,1536,2048
-
-
-500 0.001 16 1024

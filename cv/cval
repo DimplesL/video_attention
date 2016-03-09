@@ -1,0 +1,9 @@
+decrease every 500,1000 too fast
+
+batch size 16,32 ??
+wordvec 1024, 1536 no discernible difference
+
+decrease every: 500, 1000
+batch size: 16 32
+wordvec: 1024,1536
+layers 1,2,3
