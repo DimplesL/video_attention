@@ -140,6 +140,18 @@ function bleu.idxBleu(pred, truth)
 	end
     end
 
+    -- Check for empty inputs
+    numPred = 0
+    numTruth = 0
+    for _ in pairs(pred) do numPred = numPred + 1 end
+    for _ in pairs(truthGrams) do numTruth = numTruth + 1 end
+    if numTruth == 0 then
+	return 1
+    end
+    if numPred == 0 then
+	return 0
+    end
+
     -- Count the matched n-grams from the predicted caption
     local matchedGrams = {}
     for _,tok in pairs(pred) do
@@ -158,7 +170,7 @@ function bleu.idxBleu(pred, truth)
 	bleuMatched = bleuMatched + math.min(count, truthGrams[tok])
     end
 
-    return bleuMatched / #pred
+    return bleuMatched / numPred
 end
 
 function bleu.stripCapt(capt)
