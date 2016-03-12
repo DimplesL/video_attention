@@ -33,7 +33,6 @@ function layer:__init(image_input_dims, seq_input_dim, hidden_dim)
   self:reset()
 
   self.cell = torch.Tensor()    -- This will be (N, T, H)
-  self.att_presoftmax= torch.Tensor()    
   self.gates = torch.Tensor()   -- This will be (N, T, 4H)
   self.input_buf = torch.Tensor()   -- This will be (N,D)
   self.buffer1 = torch.Tensor() -- This will be (N, H)
@@ -128,6 +127,16 @@ function layer:_get_sizes(input, gradOutput)
 end
 
 
+function softmax_forward(input)
+  local x = input - input:max()
+  local z = torch.sum(torch.exp(x))
+  return torch.exp(x)/z
+end
+
+function softmax_backward(sm_out,dout)
+  return torch.cmul(torch.cmul(torch.add(torch.mul(sm_out,-1),1),sm_out),dout)
+end
+
 --[[
 Input:
 - c0: Initial cell state, (N, H)
@@ -140,11 +149,11 @@ Output:
 - h: Sequence of hidden states, (N, T, H)
 --]]
 
-
 function layer:updateOutput(input)
   local c0, h0, a0, I, x = self:_unpack_input(input)
   local N, T, SD, ID, IH, IW, H = self:_get_sizes(input)
   local D = SD + ID
+  -- reshape image feature volume as matrix
   I = I:reshape(N,ID,IH*IW) -- I is the image features
   self._return_grad_c0 = (c0 ~= nil)
   self._return_grad_h0 = (h0 ~= nil)
@@ -189,11 +198,10 @@ function layer:updateOutput(input)
   local Wh = self.weight[{{D + 1, D + H}}] --is now Hx(4*H+IW*IH)
 
   -- set up buffers for h and c
-  local h, c, a_presoftmax = self.output, self.cell, self.att_presoftmax
+  local h, c = self.output, self.cell
   local input_buf = self.input_buf
   h:resize(N, T, H):zero()
   c:resize(N, T, H):zero()
-  a_presoftmax:resize(N, T, IH*IW):zero()
   input_buf:resize(N,T,D):zero()
   -- set up prev_h, prev_c
   local prev_h, prev_c, prev_a = h0, c0, a0
@@ -202,7 +210,6 @@ function layer:updateOutput(input)
   for t = 1, T do
     local next_h = h[{{}, t}] -- NxH
     local next_c = c[{{}, t}] -- NxH
-    local next_a_presoftmax = a_presoftmax[{{}, t}] -- Nx(IH*IW)
     local cur_gates = self.gates[{{}, t}] -- current gate values
     local cur_input = input_buf[{{}, t}] -- current gate values
     cur_input[{{},{1,SD}}] = x[{{},t}]-- put the current x into the input
@@ -215,9 +222,8 @@ function layer:updateOutput(input)
     cur_gates:addmm(prev_h, Wh) -- multiply NxH prev_h by Hx(...) Wh
     cur_gates[{{}, {1, 3 * H}}]:sigmoid() -- take sigmoid of first 3 gates
     cur_gates[{{}, {3 * H + 1, 4 * H}}]:tanh() -- take tanh of last gate
-    next_a_presoftmax:copy(cur_gates[{{},{4*H+1,-1}}]) -- copy attention into a_softmax
+    cur_gates[{{}, {4*H+1, -1}}] = softmax_forward(cur_gates[{{},{4*H+1,-1}}]) -- take softmax of attention
     local next_a = cur_gates[{{}, {4 * H + 1,-1}}]
-    next_a = self.softmax:forward(next_a_presoftmax) -- take softmax of attention
     -- break out each of the gates
     local i = cur_gates[{{}, {1, H}}]
     local f = cur_gates[{{}, {H + 1, 2 * H}}]
@@ -244,7 +250,7 @@ function layer:backward(input, gradOutput, scale)
   if not att0 then att0 = self.att0 end -- this is initialized to the default uniform distribution in "updateOutput"
 
   local grad_c0, grad_h0, grad_x, grad_att, grad_seq, grad_im = self.grad_c0, self.grad_h0, self.grad_x, self.grad_att, self.grad_seq, self.grad_im
-  local h, c, att_presoftmax = self.output, self.cell, self.att_presoftmax
+  local h, c = self.output, self.cell
   local grad_h = gradOutput -- grad with respect to output
 
   local Wx = self.weight[{{1, D}}] -- left D cols of W
@@ -262,7 +268,7 @@ function layer:backward(input, gradOutput, scale)
   local grad_next_c = self.buffer2:resizeAs(c0):zero()
   local grad_next_att = self.buffer4:resizeAs(att0):zero()
   for t = T, 1, -1 do
-    local next_h, next_c, next_att_presoftmax = h[{{}, t}], c[{{}, t}], att_presoftmax[{{},t}]
+    local next_h, next_c = h[{{}, t}], c[{{}, t}]
     local prev_h, prev_c, prev_att  = nil, nil, nil
     if t == 1 then
       prev_h, prev_c, prev_att = h0, c0, att0
@@ -318,7 +324,8 @@ function layer:backward(input, gradOutput, scale)
     -- daf = dct*c_{t-1}*(sigm(af)(1-sigm(af))
     grad_af:fill(1):add(-1, f):cmul(f):cmul(prev_c):cmul(grad_next_c)
     -- add grad_a_att computation that backpropogates gradient from att_softmax through softmax 
-    grad_a_att:add(grad_next_att:cmul(self.softmax:backward(next_att_presoftmax,grad_next_att)))
+    --grad_a_att:add(grad_next_att:cmul(self.softmax:backward(next_att_presoftmax,grad_next_att)))
+    grad_a_att:add(softmax_backward(next_att,grad_next_att))
     grad_x[{{}, t}]:mm(grad_a, Wx:t())
     -- split gradx into its image part and its 
     grad_seq = grad_x[{{},t,{1,SD}}]

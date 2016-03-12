@@ -169,8 +169,8 @@ train_data_shape = (num_train,) + feat_shape
 val_data_shape = (num_val,) + feat_shape
 train_feats = h5.create_dataset('train_feats', shape=train_data_shape)
 val_feats = h5.create_dataset('val_feats', shape=val_data_shape)
-train_names = h5.create_dataset('train_names', shape=(num_train,), dtype="S10")
-val_names = h5.create_dataset('val_names', shape=(num_val,), dtype="S10")
+train_names = h5.create_dataset('train_names', shape=(num_train,), dtype="i4")
+val_names = h5.create_dataset('val_names', shape=(num_val,), dtype="i4")
 train_captions = h5.create_dataset('train_captions', shape=(num_train,max_caption_length),dtype='i4')
 val_captions = h5.create_dataset('val_captions', shape=(num_val,max_caption_length),dtype='i4')
 
@@ -190,11 +190,10 @@ for dset_name,dset_capts in idx_captions.iteritems():
 			np.concatenate((maps[dset_name], new_row), axis=0)
 
     # Get the name of the .npy features file
+    fname = "COCO_%s2014_%012d_resnet50.npy" % (dset_name, int(im_id))
     if dset_name =="train":
-      fname = "COCO_%s2014_%012d_f1.npy" % (dset_name, int(im_id))
       fname = os.path.join(args.train_dir,fname)
     elif dset_name == "val":
-      fname = "COCO_%s2014_%012d_resnet50.npy" % (dset_name, int(im_id))
       fname = os.path.join(args.val_dir,fname)
 
     # Try to load the file
@@ -213,15 +212,14 @@ for dset_name,dset_capts in idx_captions.iteritems():
     for caption in im_captions:
       # Add the token to the map
       maps[dset_name][map_idx[im_id], im_captions.index(caption)] = curr_capt
-
       # Add the caption to the dataset
       if dset_name == 'train':
         train_feats[curr_capt] = feats
-	train_names[curr_capt] = fname
+	train_names[curr_capt] = im_id
         train_captions[curr_capt] = np.array(caption,dtype=np.uint32)
       if dset_name == 'val':
         val_feats[curr_capt] = feats
-	val_names[curr_capt] = fname
+	val_names[curr_capt] = im_id
         val_captions[curr_capt] = np.array(caption,dtype=np.uint32)
       curr_capt += 1
       if curr_capt % 1000 == 0:
