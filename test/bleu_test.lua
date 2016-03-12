@@ -43,12 +43,12 @@ cmd:option('-checkpoint','/data/checkpoints/64_1536_2_2500_10000.t7')
 cmd:option('-device', 0)
 local opt = cmd:parse(arg)
 
-device = 2
+device = 1
 cutorch.setDevice(device)
 local checkpoint = torch.load(opt.checkpoint)
 
 print 'Computing BLEU on the tiny dataset...'
-local score = bleu.getScore(checkpoint, opt.h5, 'val', 'cuda', device)
+local score = bleu.getScore(checkpoint, opt.h5, 'val', 'cuda', device, 32)
 print(score)
 if score >= 0 and score <= 1 then
 	print 'PASSED'

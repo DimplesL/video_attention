@@ -15,7 +15,7 @@ bleu.split = {
     "val"
 }
 
-function bleu.getScore(checkpoint, h5name, split, mode, device)
+function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
 -- Return the bleu score over the specified split.
 -- 
 -- Parameters:
@@ -24,6 +24,7 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
 --   split: Either bleu.split.train or bleu.split.val
 --   mode: Either bleu.cpu, bleu.cuda, or bleu.cl
 --   device: The device number to use, e.g. 1 for GPU 1.
+--   batchSize: The number of images to caption at once.
 --
 -- Returns a number giving the average bleu score per caption.
 
@@ -73,45 +74,73 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
     model:resetStates()
 
     -- Process each image
-    local score = 0
+    local preds = {}
     for i=1,num_imgs do 
         -- Print our progress
         if i % 100 == 0 then
-            print(string.format('Computing BLEU for image %d', i))
+            print(string.format('Captioning image %d', i))
         end
 
+        -- Predict in batch mode
+        if preds[i] == nil then
+            -- Get the size of this batch
+            local thisBatchSize = math.min(batchSize, num_imgs - i + 1)
+
+            -- Load each image's features
+	    local x = torch.zeros(thisBatchSize, feat_len):type(dtype)
+            for j=1,thisBatchSize do
+                -- Load the caption indices for this image
+		local im_idx = i + j - 1
+                local capt_idxs = torch.totable(map_dset:partial({im_idx, im_idx}, {1, idxs_per_img}))[1]
+                -- Load the features for this image and convert to Torch's format
+                local feat_idx = capt_idxs[1] + 1
+                if feat_idx < 1 then
+                    print(string.format('bleu.lua: Invalid map index detected at image %d', i))
+                    exit(1)
+                end
+                local feat = feat_dset:partial({feat_idx, feat_idx},{1, feat_len})
+                x[{j,{}}] = feat:type(dtype):reshape(1, feat_len)
+            end
+
+	    -- Predict this batch
+            local batchPred = torch.totable(model:sample({length=capt_len,h0=x}):reshape(thisBatchSize, capt_len))
+
+	    -- Store the predictions
+	    for j=1,thisBatchSize do
+		local im_idx = i + j - 1
+		assert(preds[im_idx] == nil)
+		assert(batchPred[j] ~= nil)
+		preds[im_idx] = batchPred[j]
+		print(im_idx)
+	    end
+        end
+    end
+
+    -- Compute the BLEU for each prediction
+    local score = 0
+    for i=1,num_imgs do
         -- Load the caption indices for this image
         local capt_idxs = torch.totable(map_dset:partial({i, i}, {1, idxs_per_img}))[1]
-
-        -- Load the features and convert to Torch's format
-        local feat_idx = capt_idxs[1] + 1
-	if feat_idx < 1 then
-		print(string.format('bleu.lua: Invalid map index detected at image %d', i))
-		exit(1)
-	end
-        local x = feat_dset:partial({feat_idx, feat_idx},{1, feat_len})
-        x = x:type(dtype):reshape(1, feat_len)
-
-	-- Predict
-  	local pred = torch.totable(model:sample({length=capt_len,h0=x}):reshape(1, capt_len))[1]
 
         -- Load the ground truth captions
         local truth = {}
         for _,capt_idx in pairs(capt_idxs) do
-	    -- Check for the 'no caption' flag
-	    if capt_idx < 0 then
-		break
-	    end
+            -- Check for the 'no caption' flag
+            if capt_idx < 0 then
+                break
+            end
 
             -- Convert to 1-indexing
-            capt_1idx = capt_idx + 1
+            local capt_1idx = capt_idx + 1
 
             -- Load the caption
             truth[#truth + 1] = torch.totable(captions_dset:partial({capt_1idx,capt_1idx},{1,capt_len}))[1]
         end
 
         -- Accumulate the BLEU score
-        score = score + bleu.idxBleu(pred, truth)
+	print(preds[i])
+	assert(preds[i] ~= nil)
+        score = score + bleu.idxBleu(preds[i], truth)
     end
 
     return score / num_imgs
@@ -124,30 +153,30 @@ function bleu.idxBleu(pred, truth)
     -- Strip both pred and truth of fluff tokens
     pred = bleu.stripCapt(pred)
     for idx, capt in pairs(truth) do
-	truth[idx] = bleu.stripCapt(capt)
+        truth[idx] = bleu.stripCapt(capt)
     end
 
     -- Count the max occurence of each n-gram in any ground truth caption
     local truthGrams = {}
     for _,capt in pairs(truth) do
-	-- Count the n-grams for this caption
-	local captGrams = {}
-        for _,tok in pairs(capt) do	
-	   if captGrams[tok] == nil then
-	       captGrams[tok] = 1
-	   else
-	       captGrams[tok] = captGrams[tok] + 1
-	   end
-	end
+        -- Count the n-grams for this caption
+        local captGrams = {}
+        for _,tok in pairs(capt) do     
+           if captGrams[tok] == nil then
+               captGrams[tok] = 1
+           else
+               captGrams[tok] = captGrams[tok] + 1
+           end
+        end
 
-	-- Compute the maximum n-grams counts across all captions
-	for tok, count in pairs(captGrams) do
-	    if truthGrams[tok] == nil then
-		truthGrams[tok] = count
-	    else
-	    	truthGrams[tok] = math.max(truthGrams[tok], count)
-	    end
-	end
+        -- Compute the maximum n-grams counts across all captions
+        for tok, count in pairs(captGrams) do
+            if truthGrams[tok] == nil then
+                truthGrams[tok] = count
+            else
+                truthGrams[tok] = math.max(truthGrams[tok], count)
+            end
+        end
     end
 
     -- Check for empty inputs
@@ -156,10 +185,10 @@ function bleu.idxBleu(pred, truth)
     for _ in pairs(pred) do numPred = numPred + 1 end
     for _ in pairs(truthGrams) do numTruth = numTruth + 1 end
     if numTruth == 0 then
-	return 1
+        return 1
     end
     if numPred == 0 then
-	return 0
+        return 0
     end
 
     -- Count the matched n-grams from the predicted caption
@@ -177,7 +206,7 @@ function bleu.idxBleu(pred, truth)
     -- Tally the bleu score by restricting the matches to truthGrams
     local bleuMatched = 0
     for tok, count in pairs(matchedGrams) do
-	bleuMatched = bleuMatched + math.min(count, truthGrams[tok])
+        bleuMatched = bleuMatched + math.min(count, truthGrams[tok])
     end
 
     return bleuMatched / numPred
@@ -192,9 +221,9 @@ function bleu.stripCapt(capt)
     -- Rebuild the caption out-of-place
     local stripped = {}
     for _,tok in pairs(capt) do
-	if tok > fluffTok then
-	    stripped[#stripped + 1] = tok
-	end
+        if tok > fluffTok then
+            stripped[#stripped + 1] = tok
+        end
     end
 
     return stripped
