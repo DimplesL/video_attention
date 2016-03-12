@@ -38,7 +38,7 @@ idxTest({5, 6, 7}, {{6}, {7}}, 2/3)
 
 print 'Loading the torch model...'
 local cmd = torch.CmdLine()
-cmd:option('-h5', '/data/coco/tiny_coco2.h5')
+cmd:option('-h5', '/data/coco/tiny_coco.h5')
 cmd:option('-checkpoint','/data/checkpoints/64_1536_2_2500_10000.t7')
 cmd:option('-device', 0)
 local opt = cmd:parse(arg)

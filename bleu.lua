@@ -28,6 +28,9 @@ function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
 --
 -- Returns a number giving the average bleu score per caption.
 
+    -- Print options
+    print('Using split '..split..'...')
+
     -- Choose a torch datatype and computing backend
     local dtype = 'torch.FloatTensor'
     if mode == 'cuda' then
@@ -146,19 +149,18 @@ function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
 
         --XXX
         print('-----------PRED-----------')
-	print(preds[i])
         bleu.printCapt(preds[i], model)
         print('-----------TRUTH-----------')
         for _,capt in pairs(truth) do
-	    print(capt)
 	    bleu.printCapt(capt, model)
         end
     
 
         -- Accumulate the BLEU score
-	print(preds[i])
 	assert(preds[i] ~= nil)
-        score = score + bleu.idxBleu(preds[i], truth)
+	thisScore, predMatched = bleu.idxBleu(preds[i], truth)
+	bleu.printCapt(predMatched, model)
+        score = score + thisScore
     end
 
     return score / num_imgs
@@ -167,6 +169,10 @@ end
 function bleu.idxBleu(pred, truth)
 --Internal function to compute the BLEU score given two tables of tokens. pred
 --contains the predicted tokens, truth is a table, each element of which is a ground truth caption
+--
+-- Returns:
+--   score: The BLEU score
+--   predMatched: The matched tokens, ignoring repetitions
 
     -- Strip both pred and truth of fluff tokens
     pred = bleu.stripCapt(pred)
@@ -210,9 +216,11 @@ function bleu.idxBleu(pred, truth)
     end
 
     -- Count the matched n-grams from the predicted caption
+    local predMatched = {}
     local matchedGrams = {}
     for _,tok in pairs(pred) do
         if truthGrams[tok] ~= nil then
+	    predMatched[#predMatched + 1] = tok
             if matchedGrams[tok] == nil then
                 matchedGrams[tok] = 1
             else
@@ -226,15 +234,17 @@ function bleu.idxBleu(pred, truth)
     for tok, count in pairs(matchedGrams) do
         bleuMatched = bleuMatched + math.min(count, truthGrams[tok])
     end
+    print('------------MATCHED--------------')
+    print(string.format('%d / %d', bleuMatched, numPred))
 
-    return bleuMatched / numPred
+    return bleuMatched / numPred, predMatched
 end
 
 function bleu.stripCapt(capt)
 -- Internal function to strip a table of fluff tokens. Warning: this assumes any token less than or equal to fluffTok is fluff.
 
     -- HARDCODED tokens less than or equal to this are fluff
-    local fluffTok = 4
+    local fluffTok = 3
 
     -- Rebuild the caption out-of-place
     local stripped = {}
@@ -249,6 +259,6 @@ end
 
 function bleu.printCapt(capt, model)
 -- Print a table of numbers as a caption
-print(model:decode_string(torch.Tensor(capt)))
+print(model:decode_string(torch.Tensor(bleu.stripCapt(capt))))
 
 end
