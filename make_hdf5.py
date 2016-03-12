@@ -159,8 +159,7 @@ for dset_name, max_capts in im_max_capts.iteritems():
 # Initialize maps from images to h5 caption/feature indices. -1 means no caption
 num_train = num_capts['train']
 num_val = num_capts['val']
-maps = {'train' : -np.ones(shape=(num_train, im_max_capts['train']), dtype=np.uint64), 
-        'val' : -np.ones(shape=(num_val, im_max_capts['val']), dtype=np.uint64)}
+maps = {'train' : None, 'val' : None} 
 print "Writing hd5"
 # create the datasets
 # dataset will be N x max_caption_length
@@ -183,6 +182,12 @@ for dset_name,dset_capts in idx_captions.iteritems():
     # If necessary, add this image to the map_idx lookup table.
     if im_id not in map_idx:
 	map_idx[im_id] = len(map_idx)
+	new_row = -np.ones(shape=(1, im_max_capts[dset_name]), dtype=np.uint64)
+	if maps[dset_name] is None:
+		maps[dset_name] = new_row
+	else:
+		maps[dset_name] = \
+			np.concatenate((maps[dset_name], new_row), axis=0)
 
     # Get the name of the .npy features file
     if dset_name =="train":

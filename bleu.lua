@@ -86,8 +86,8 @@ function bleu.getScore(checkpoint, h5name, split, mode, device)
         -- Load the features and convert to Torch's format
         local feat_idx = capt_idxs[1] + 1
 	if feat_idx < 1 then
-		print(string.format('WARNING: Invalid map index detected: breaking out at image %d', i))
-		return score / i
+		print(string.format('bleu.lua: Invalid map index detected at image %d', i))
+		exit(1)
 	end
         local x = feat_dset:partial({feat_idx, feat_idx},{1, feat_len})
         x = x:type(dtype):reshape(1, feat_len)
