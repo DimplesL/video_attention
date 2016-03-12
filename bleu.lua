@@ -111,7 +111,6 @@ function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
 		assert(preds[im_idx] == nil)
 		assert(batchPred[j] ~= nil)
 		preds[im_idx] = batchPred[j]
-		print(im_idx)
 	    end
         end
     end
@@ -134,8 +133,27 @@ function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
             local capt_1idx = capt_idx + 1
 
             -- Load the caption
-            truth[#truth + 1] = torch.totable(captions_dset:partial({capt_1idx,capt_1idx},{1,capt_len}))[1]
+            capt = torch.totable(captions_dset:partial({capt_1idx,capt_1idx},{1,capt_len}))[1]
+
+	   -- Add one to each token
+	   for tok_idx,tok in pairs(capt) do
+		capt[tok_idx] = tok + 1
+	   end
+	   
+	   -- Store the caption
+	   truth[#truth + 1] = capt
         end
+
+        --XXX
+        print('-----------PRED-----------')
+	print(preds[i])
+        bleu.printCapt(preds[i], model)
+        print('-----------TRUTH-----------')
+        for _,capt in pairs(truth) do
+	    print(capt)
+	    bleu.printCapt(capt, model)
+        end
+    
 
         -- Accumulate the BLEU score
 	print(preds[i])
@@ -149,7 +167,7 @@ end
 function bleu.idxBleu(pred, truth)
 --Internal function to compute the BLEU score given two tables of tokens. pred
 --contains the predicted tokens, truth is a table, each element of which is a ground truth caption
-    
+
     -- Strip both pred and truth of fluff tokens
     pred = bleu.stripCapt(pred)
     for idx, capt in pairs(truth) do
@@ -216,7 +234,7 @@ function bleu.stripCapt(capt)
 -- Internal function to strip a table of fluff tokens. Warning: this assumes any token less than or equal to fluffTok is fluff.
 
     -- HARDCODED tokens less than or equal to this are fluff
-    local fluffTok = 3
+    local fluffTok = 4
 
     -- Rebuild the caption out-of-place
     local stripped = {}
@@ -227,4 +245,10 @@ function bleu.stripCapt(capt)
     end
 
     return stripped
+end
+
+function bleu.printCapt(capt, model)
+-- Print a table of numbers as a caption
+print(model:decode_string(torch.Tensor(capt)))
+
 end
