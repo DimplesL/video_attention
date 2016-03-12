@@ -159,9 +159,10 @@ function LM:sample(kwargs)
   -- max length of caption
   local T = utils.get_kwarg(kwargs, 'length', 100)
   -- initial hidden state (image features)
-  local h0 = utils.get_kwarg(kwargs, 'h0', torch.zeros(self.rnn_size))
+  local h0 = utils.get_kwarg(kwargs, 'h0')
+  local N,H = h0:size(1), h0:size(2)
   -- array holding sampled caption
-  local sampled = torch.LongTensor(1, T)
+  local sampled = torch.LongTensor(N, T)
   -- storage for scores and 
   local scores
   -- reset hidden and cell states
@@ -171,9 +172,9 @@ function LM:sample(kwargs)
     rnn:rememberStates(true)
   end
   -- get start token
-  local x = torch.LongTensor(1):fill(self.token_to_idx["<START>"]):view(1,-1)
+  local x = torch.CudaTensor(N,1):fill(self.token_to_idx["<START>"])
   -- first forward pass
-  scores = self:forward({h0,x})[{{}, {1, 1}}]
+  scores = self:forward({h0,x})
   for t = 1, T do
     -- get the NxTxV (in this case 1x1xV) scores and take the argmax
     local _, next_word = scores:max(3)
@@ -188,7 +189,7 @@ function LM:sample(kwargs)
   for i, rnn in ipairs(self.rnns) do
     rnn:rememberStates(false)
   end
-  return sampled[1]
+  return sampled
 end
 
 
