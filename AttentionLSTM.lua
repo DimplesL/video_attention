@@ -142,8 +142,8 @@ Input:
 - c0: Initial cell state, (N, H)
 - h0: Initial hidden state, (N, H)
 - a0: Initial attention state, (N, IH*IW)
-- x: Input sequence, (N, T, SD)
 - I: Input images , (N,ID, IH, IW)
+- x: Input sequence, (N, T, SD)
 
 Output:
 - h: Sequence of hidden states, (N, T, H)
@@ -154,7 +154,7 @@ function layer:updateOutput(input)
   local N, T, SD, ID, IH, IW, H = self:_get_sizes(input)
   local D = SD + ID
   -- reshape image feature volume as matrix
-  I = I:reshape(N,ID,IH*IW) 
+  I = I:reshape(N,ID,IH*IW) -- I is the image features
   self._return_grad_c0 = (c0 ~= nil)
   self._return_grad_h0 = (h0 ~= nil)
   if not c0 then -- if c0 is not provided
@@ -223,16 +223,16 @@ function layer:updateOutput(input)
     cur_gates[{{}, {1, 3 * H}}]:sigmoid() -- take sigmoid of first 3 gates
     cur_gates[{{}, {3 * H + 1, 4 * H}}]:tanh() -- take tanh of last gate
     cur_gates[{{}, {4*H+1, -1}}] = softmax_forward(cur_gates[{{},{4*H+1,-1}}]) -- take softmax of attention
+    local next_a = cur_gates[{{}, {4 * H + 1,-1}}]
     -- break out each of the gates
     local i = cur_gates[{{}, {1, H}}]
     local f = cur_gates[{{}, {H + 1, 2 * H}}]
     local o = cur_gates[{{}, {2 * H + 1, 3 * H}}]
     local g = cur_gates[{{}, {3 * H + 1, 4 * H}}]
-    prev_a = cur_gates[{{}, {4 * H + 1,-1}}]
     next_h:cmul(i, g) -- compute next hidden
     next_c:cmul(f, prev_c):add(next_h) -- compute next cell
     next_h:tanh(next_c):cmul(o) --finish computing hidden
-    prev_h, prev_c =  next_h, next_c --update vars
+    prev_h, prev_c, prev_a =  next_h, next_c, next_a --update vars
   end
 
   return self.output
