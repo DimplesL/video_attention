@@ -80,7 +80,7 @@ function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
     local preds = {}
     for i=1,num_imgs do 
         -- Print our progress
-        if i % 100 == 0 then
+        if i % 5000 == 0 then
             print(string.format('Captioning image %d', i))
         end
 
@@ -147,7 +147,6 @@ function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
 	   truth[#truth + 1] = capt
         end
 
-        --XXX
         print('-----------PRED-----------')
         bleu.printCapt(preds[i], model)
         print('-----------TRUTH-----------')
