@@ -259,6 +259,10 @@ end
 
 function bleu.printCapt(capt, model)
 -- Print a table of numbers as a caption
-print(model:decode_string(torch.Tensor(bleu.stripCapt(capt))))
+if next(capt) == nil then
+	print('')
+else
+	print(model:decode_string(torch.Tensor(bleu.stripCapt(capt))))
+end
 
 end
