@@ -30,8 +30,8 @@ h5 = h5py.File(args.output_h5, "w")
 # Make the test dataset
 test_files = glob.glob(os.path.join(args.test_dir,"*_f1.npy"))
 test_files = np.random.choice(test_files, \
-	size=math.floor(float(args.subsample_percent)*len(test_files)), \
-	replace=False)
+        size=math.floor(float(args.subsample_percent)*len(test_files)), \
+        replace=False)
 num_test = len(test_files)
 test_names = h5.create_dataset('test_names', shape=(num_test,), dtype="S10")
 
@@ -55,7 +55,7 @@ for i,fname in enumerate(test_files):
   test_dset[i] = feats
   test_names[i] = fname
   if i % 1000 == 0:
-	print "Added %d of %d features to test dataset" % (i,num_test)
+        print "Added %d of %d features to test dataset" % (i,num_test)
 
 print "Loading captions json..."
 trainf = open(args.train_json)
@@ -151,7 +151,7 @@ with open(args.output_json, 'w') as f:
 im_max_capts = {'train': -1, 'val' : -1}
 for dset_name, dset_capts in captions.iteritems():
     for im_id, im_captions in dset_capts.iteritems():
-	im_max_capts[dset_name] = max(im_max_capts[dset_name], len(im_captions))
+        im_max_capts[dset_name] = max(im_max_capts[dset_name], len(im_captions))
 
 for dset_name, max_capts in im_max_capts.iteritems():
     print "Dataset %s has at most %d captions per image" % (dset_name, max_capts)
@@ -160,6 +160,7 @@ for dset_name, max_capts in im_max_capts.iteritems():
 num_train = num_capts['train']
 num_val = num_capts['val']
 maps = {'train' : None, 'val' : None} 
+
 print "Writing hd5"
 # create the datasets
 # dataset will be N x max_caption_length
@@ -175,26 +176,29 @@ train_captions = h5.create_dataset('train_captions', shape=(num_train,max_captio
 val_captions = h5.create_dataset('val_captions', shape=(num_val,max_caption_length),dtype='i4')
 
 # Add each caption to the datasets and build the maps
+dset_dirs = {'train' : args.train_dir, 'val' : args.val_dir}
+dset_feats = {'train' : train_feats, 'val' : val_feats}
+dset_names = {'train' : train_names, 'val' : val_names}
+dset_captions = {'train' : train_captions, 'val' : val_captions}
 for dset_name,dset_capts in idx_captions.iteritems():
   curr_capt = 0
   map_idx = defaultdict(int);
   for im_id, im_captions in dset_capts.iteritems():
     # If necessary, add this image to the map_idx lookup table.
     if im_id not in map_idx:
-	map_idx[im_id] = len(map_idx)
-	new_row = -np.ones(shape=(1, im_max_capts[dset_name]), dtype=np.uint64)
-	if maps[dset_name] is None:
-		maps[dset_name] = new_row
-	else:
-		maps[dset_name] = \
-			np.concatenate((maps[dset_name], new_row), axis=0)
+        map_idx[im_id] = len(map_idx)
+        new_row = -np.ones(shape=(1, im_max_capts[dset_name]), dtype=np.int64)
+        if maps[dset_name] is None:
+                assert(map_idx[im_id] == 0)
+                maps[dset_name] = new_row
+        else:
+                assert(map_idx[im_id] == maps[dset_name].shape[0])
+                maps[dset_name] = \
+                        np.concatenate((maps[dset_name], new_row), axis=0)
 
     # Get the name of the .npy features file
-    fname = "COCO_%s2014_%012d_resnet50.npy" % (dset_name, int(im_id))
-    if dset_name =="train":
-      fname = os.path.join(args.train_dir,fname)
-    elif dset_name == "val":
-      fname = os.path.join(args.val_dir,fname)
+    fname = os.path.join(dset_dirs[dset_name], \
+            "COCO_%s2014_%012d_resnet50.npy" % (dset_name, int(im_id)))
 
     # Try to load the file
     try:
@@ -209,22 +213,52 @@ for dset_name,dset_capts in idx_captions.iteritems():
       assert(len(feats.shape) == 3)
 
     # Add each caption to the map/dataset
+    assert(len(im_captions) > 0)
     for caption in im_captions:
       # Add the token to the map
       maps[dset_name][map_idx[im_id], im_captions.index(caption)] = curr_capt
+
       # Add the caption to the dataset
-      if dset_name == 'train':
-        train_feats[curr_capt] = feats
-	train_names[curr_capt] = im_id
-        train_captions[curr_capt] = np.array(caption,dtype=np.uint32)
-      if dset_name == 'val':
-        val_feats[curr_capt] = feats
-	val_names[curr_capt] = im_id
-        val_captions[curr_capt] = np.array(caption,dtype=np.uint32)
+      dset_feats[dset_name][curr_capt] = feats
+      dset_names[dset_name][curr_capt] = im_id
+      dset_captions[dset_name][curr_capt] = np.array(caption, dtype=np.uint32)
+
+      # Increment the caption counter
       curr_capt += 1
       if curr_capt % 1000 == 0:
         print "Saved %d %s captions out of %d" % (curr_capt,dset_name,num_capts[dset_name])
 
+# Check the maps for validity
+print 'Verifying the maps before saving...'
+for dset_name, dset_map in maps.iteritems():
+    for i in range(dset_map.shape[0]):
+        capt_idxs = dset_map[i]
+
+        # Check that there is a caption here
+        assert ~np.all(capt_idxs < 0)
+
+        # Get the valid caption indices
+        validCapt = np.nonzero(capt_idxs >= 0)[0]
+
+        # Get the 'no caption' indices
+        noCapt = np.nonzero(capt_idxs < 0)[0]
+
+        # Check that the last caption comes before all -1 tokens
+        if noCapt.shape[0] > 0:
+            assert(np.max(validCapt) > np.min(noCapt))
+
+        # Check that each valid caption has the same features and ID
+        ref_feat = None
+        ref_id = None
+        for capt_idx in validCapt:
+            if ref_feat is None:
+                assert(ref_id is None)
+                ref_feat = dset_feats[dset_name][capt_idx]
+                ref_id = dset_names[dset_name][capt_idx]
+            else:
+                assert(np.all(np.equal(dset_feats[dset_name][capt_idx], ref_feat)))
+                assert(np.all(np.equal(dset_names[dset_name][capt_idx], ref_id)))
+
 # Add the maps to the h5 file
 for dset_name, dset_map in maps.iteritems():
-	h5.create_dataset(dset_name + '_map', data=dset_map)
+        h5.create_dataset(dset_name + '_map', data=dset_map)

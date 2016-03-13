@@ -6,9 +6,9 @@ nohup th train.lua -input_h5 /data/coco/coco.h5 \
              -model_type "lstm" \
              -wordvec_size 1536 \
              -rnn_size 2048 \
-             -num_layers 2\
+             -num_layers 1 \
              -learning_rate 0.001 \
              -checkpoint_every 250 \
-             -checkpoint_name /data/checkpoints/16_1536_500_2 \
+             -checkpoint_name /data/checkpoints/16_1536_500 \
              -lr_decay_every 500 \
-             -max_epochs 500 > train10.log &
+             -max_epochs 500 > train2.log &
