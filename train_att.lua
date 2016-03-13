@@ -79,14 +79,14 @@ for k, v in pairs(vocab.idx_to_token) do
   idx_to_token[tonumber(k)+1] = v
 end
 
--- Load a batch to get the dimensions
-N, T = loader.batch_size, loader.capt_len
+-- Get the dimensions from the DataLoader
 local opt_clone = torch.deserialize(torch.serialize(opt))
+local N, T = loader.batch_size, loader.capt_len
+local seq_length = T - 1
 opt_clone.idx_to_token = idx_to_token
-local feats, capts = loader:nextBatch('train')
-opt_clone.im_size = {feats[1].size(2), feats[1].size(3)}
-print(string.format('Detected image size %dx%d', opt_clone.im_size[1], 
-    opt_clone.im_size[2]))
+opt_clone.im_size = loader.image_size
+print(string.format('Detected image size %dx%dx%d', opt_clone.im_size[1], 
+    opt_clone.im_size[2], opt_clone.im_size[3]))
 
 -- Initialize the model and criterion
 local model = nn.AttentionCaptioningModel(opt_clone):type(dtype)
@@ -128,8 +128,8 @@ local function f(w)
 
   X = capts[{{},{1,-2}}]:clone()
   y = capts[{{},{2,-1}}]:clone()
-  assert(X:size(2)==opt.seq_length,"Sequence length doesn't match the supplied captions")
-  assert(y:size(2)==opt.seq_length,"Sequence length doesn't match the supplied captions")
+  assert(X:size(2)==seq_length,"Sequence length doesn't match the supplied captions")
+  assert(y:size(2)==seq_length,"Sequence length doesn't match the supplied captions")
   model:resetStates()
   local scores = model:forward({feats,X})
 

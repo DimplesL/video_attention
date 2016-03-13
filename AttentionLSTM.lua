@@ -127,7 +127,7 @@ end
 
 
 function layer:softmax_forward_all(input)
-  local sm = torch.Tensor():resizeAs(input):zero()
+  local sm = input:clone():zero()
   for i = 1,input:size(1) do
     sm[{i,{}}] = self:softmax_forward(input[{i,{}}])
   end
@@ -135,7 +135,7 @@ function layer:softmax_forward_all(input)
 end
 
 function layer:softmax_backward_all(sm,dout)
-  local dsm = torch.Tensor():resizeAs(sm):zero()
+  local dsm = sm:clone():zero()
   for i = 1,sm:size(1) do
     dsm[{i,{}}] = self:softmax_backward(sm[{i,{}}],dout[{i,{}}])
   end

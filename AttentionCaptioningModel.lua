@@ -2,8 +2,7 @@ require 'torch'
 require 'nn'
 
 require 'TemporalAdapter'
-require 'VanillaRNN'
-require 'LSTM'
+require 'AttentionLSTM'
 
 local utils = require 'util.utils'
 
@@ -27,21 +26,21 @@ function AM:__init(kwargs)
   local V, D, H = self.vocab_size, self.wordvec_dim, self.rnn_size
   local ID, IH, IW = self.im_size[1], self.im_size[2], self.im_size[3]
 
-
   self.lookup = nn.LookupTable(V, D)
-  self.net = nn.Sequentila()
-  self.net:add(nn.AttentionLSTM(self.im_size,D,H))
+  self.net = nn.Sequential()
+  self.rnns = {nn.AttentionLSTM(self.im_size,D,H)}
+  self.net:add(self.rnns[1])
   self.net:add(nn.TemporalAdapter(nn.Linear(H, V)))
 end
 
 
 function AM:updateOutput(input)
   -- unpack h0 and x
-  local h0, x, I = nil, nil, nil
+  local h0, I, x = nil, nil, nil
   if torch.type(input) == 'table' and #input == 3 then
-    h0, x, I = unpack(input)
+    h0, I, x = unpack(input)
   elseif torch.type(input) == 'table' and #input == 2 then
-    x, I = unpack(input)
+    I, x = unpack(input)
   else
     assert(false,"invalid input")
   end
