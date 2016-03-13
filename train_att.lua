@@ -81,8 +81,8 @@ end
 
 -- Get the dimensions from the DataLoader
 local opt_clone = torch.deserialize(torch.serialize(opt))
-local N, T = loader.batch_size, loader.capt_len
-local seq_length = T - 1
+local N, truth_capt_len = loader.batch_size, loader.capt_len
+local seq_length = truth_capt_len - 1
 opt_clone.idx_to_token = idx_to_token
 opt_clone.im_size = loader.image_size
 print(string.format('Detected image size %dx%dx%d', opt_clone.im_size[1], 
@@ -135,12 +135,12 @@ local function f(w)
 
   -- Use the Criterion to compute loss; we need to reshape the scores to be
   -- two-dimensional before doing so. Annoying.
-  local scores_view = scores:view(N * T, -1)
-  local y_view = y:view(N * T)
+  local scores_view = scores:view(N * seq_length, -1)
+  local y_view = y:view(N * seq_length)
   local loss = crit:forward(scores_view, y_view)
 
   -- Run the Criterion and model backward to compute gradients, maybe timing it
-  local grad_scores = crit:backward(scores_view, y_view):view(N, T, -1)
+  local grad_scores = crit:backward(scores_view, y_view):view(N, seq_length, -1)
   model:backward(X, grad_scores,nil)
   if timer then
     if cutorch then cutorch.synchronize() end
