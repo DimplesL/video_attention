@@ -32,8 +32,24 @@ function tests.forward()
   tester:asserteq(h, h)
 end
 
+function tests.gradcheck_softmaxTest()
+  local N, T, SD, H, ID, IH,IW = 1, 6, 7, 8, 9, 10,10 
+  local lstm = nn.AttentionLSTM({ID,IH,IW}, SD, H)
+  local att = torch.randn(N,IH*IW)
+  local sm = lstm:softmax_forward_all(att)
+  local dout = torch.Tensor()
+  dout:resizeAs(att):fill(1)
+  local dsm = lstm:softmax_backward_all(sm, dout)
+  local function f(x) return lstm:softmax_forward_all(att) end
+  local dsm_num = gradcheck.numeric_gradient(f, att, dsm)
+  local dsm_error = gradcheck.relative_error(dsm_num, dsm)
+  local abs_error = torch.abs(dsm_num - dsm):sum()
+  tester:assertle(dsm_error, 1e-4)
+  tester:assertle(abs_error, 1e-10)
+end
+
 function tests.gradcheck()
-  local N, T, SD, H, ID, IH,IW = 2, 2, 7, 8, 9, 10,10 
+  local N, T, SD, H, ID, IH,IW = 2, 3, 4, 5, 6, 7,7 
 
   local x = torch.randn(N, T, SD)
   local I = torch.randn(N, ID, IH, IW)

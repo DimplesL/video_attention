@@ -127,17 +127,33 @@ function layer:_get_sizes(input, gradOutput)
 end
 
 
-function softmax_forward(input)
+function layer:softmax_forward_all(input)
+  local sm = torch.Tensor():resizeAs(input):zero()
+  for i = 1,input:size(1) do
+    sm[{i,{}}] = self:softmax_forward(input[{i,{}}])
+  end
+  return sm
+end
+
+function layer:softmax_backward_all(sm,dout)
+  local dsm = torch.Tensor():resizeAs(sm):zero()
+  for i = 1,sm:size(1) do
+    dsm[{i,{}}] = self:softmax_backward(sm[{i,{}}],dout[{i,{}}])
+  end
+  return dsm
+end
+
+
+function layer:softmax_forward(input)
   local x = input - input:max()
   local z = torch.sum(torch.exp(x))
-  if z == 0 then
-    print("Fuk")
-  end
   return torch.exp(x)/z
 end
 
-function softmax_backward(sm_out,dout)
-  return torch.cmul(torch.cmul(torch.add(torch.mul(sm_out,-1),1),sm_out),dout)
+function layer:softmax_backward(sm,dout)
+  local P = torch.ger(-sm,sm)
+  P:add(torch.diag(sm))
+  return torch.mv(P,dout)
 end
 
 --[[
@@ -216,21 +232,19 @@ function layer:updateOutput(input)
   self.gates:resize(N, T, weight_height):zero()
   for t = 1, T do
     --print('t: h,c,a:',t, isnan(prev_h), isnan(prev_c), isnan(prev_a))
-
     local next_h = h[{{}, t}] -- NxH
     local next_c = c[{{}, t}] -- NxH
     local cur_gates = self.gates[{{}, t}] -- current gate values
     local cur_input = input_buf[{{}, t}] -- current gate values
     cur_input[{{},{1,SD}}]:copy(x[{{},t}])-- put the current x into the input
-    local tmp = torch.Tensor(N,ID,1):zero()
-    tmp:baddbmm(I,prev_a:reshape(N,IH*IW,1)) -- add the image to the input
+    local tmp = torch.bmm(I,prev_a:reshape(N,IH*IW,1)) -- add the image to the input
     cur_input[{{},{SD+1,-1}}]:copy(tmp:squeeze())
     --cur_input[{{},{SD+1,-1}}]:view(N,ID,1):baddbmm(I:view(N,ID,IH*IW),prev_a:view(N,IH*IW,1)) -- add the image to the input
     cur_gates:addmm(bias_expand, cur_input:squeeze(), Wx) -- multiply NxD cur_input by Dx(...) Wx
     cur_gates:addmm(prev_h, Wh) -- multiply NxH prev_h by Hx(...) Wh
     cur_gates[{{}, {1, 3 * H}}]:sigmoid() -- take sigmoid of first 3 gates
     cur_gates[{{}, {3 * H + 1, 4 * H}}]:tanh() -- take tanh of last gate
-    cur_gates[{{}, {4*H+1, -1}}] = softmax_forward(cur_gates[{{},{4*H+1,-1}}]) -- take softmax of attention
+    cur_gates[{{}, {4*H+1, -1}}] = self:softmax_forward_all(cur_gates[{{},{4*H+1,-1}}]) -- take softmax of attention
     local next_a = cur_gates[{{}, {4 * H + 1,-1}}]
     -- break out each of the gates
     local i = cur_gates[{{}, {1, H}}]
@@ -268,8 +282,8 @@ function layer:backward(input, gradOutput, scale)
   local grad_b = self.gradBias
   grad_h0:resizeAs(h0):zero() 
   grad_c0:resizeAs(c0):zero()
-  grad_a0:resize(N,IH*IW):zero() 
-  grad_x:resize(N,T,D):zero() 
+  grad_a0:resize(N,IH*IW):zero()
+  grad_x:resize(N,T,D):zero()
   grad_im:resizeAs(I):zero()
   grad_att:resizeAs(att0):zero()
   local grad_next_h = self.buffer1:resizeAs(h0):zero()
@@ -334,7 +348,7 @@ function layer:backward(input, gradOutput, scale)
     grad_af:fill(1):add(-1, f):cmul(f):cmul(prev_c):cmul(grad_next_c)
     -- add grad_a_att computation that backpropogates gradient from att_softmax through softmax 
     --grad_a_att:add(grad_next_att:cmul(self.softmax:backward(next_att_presoftmax,grad_next_att)))
-    grad_a_att:add(softmax_backward(next_att,grad_next_att))
+    grad_a_att:add(self:softmax_backward_all(next_att,grad_next_att))
     grad_x[{{}, t}]:mm(grad_a, Wx:t())
     -- split gradx into its image part and its 
     local grad_attended_im = grad_x[{{},t,{SD+1,-1}}]
@@ -342,8 +356,10 @@ function layer:backward(input, gradOutput, scale)
     grad_Wh:addmm(scale, prev_h:t(), grad_a)
     local grad_a_sum = self.buffer3:resize(H):sum(grad_a, 1)
     grad_b:add(scale, grad_a_sum)
-    grad_next_att:view(N,IH*IW,1):baddbmm(I:transpose(2,3),grad_attended_im:reshape(N,ID,1))
-    local tmp =  torch.bmm(grad_attended_im:reshape(N,ID,1),prev_att:reshape(N,1,IH*IW))
+    grad_next_att:zero()
+    --grad_next_att:view(N,IH*IW,1) = torch.bmm(I:transpose(2,3),grad_attended_im:reshape(N,ID,1))
+    grad_next_att = torch.bmm(I:transpose(2,3),grad_attended_im:reshape(N,ID,1))
+    local tmp = torch.bmm(grad_attended_im:reshape(N,ID,1),prev_att:reshape(N,1,IH*IW))
     grad_im:add(tmp:view(N,ID,IH,IW))
     grad_next_h:mm(grad_a, Wh:t())
     grad_next_c:cmul(f)
