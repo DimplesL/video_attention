@@ -2,7 +2,6 @@ nohup th train_att.lua -input_h5 /data/coco/coco_bgr_noavg.h5 \
              -input_json /data/coco/coco_vocab.json \
              -gpu 0 \
              -batch_size 64 \
-             -seq_length 51 \
              -model_type "lstm" \
              -wordvec_size 1536 \
              -rnn_size 2048 \
