@@ -16,6 +16,22 @@ local function check_size(x, dims)
   end
 end
 
+function tests.forward()
+-- Test that we can run a forward pass
+  local N, T, SD, H, ID, IH,IW = 5, 6, 7, 8, 9, 10,10 
+
+  local x = torch.randn(N, T, SD)
+  local I = torch.randn(N, ID, IH, IW)
+  local h0 = torch.randn(N, H)
+  local c0 = torch.randn(N, H)
+  local a0 = torch.randn(N, IH*IW)
+  
+  local lstm = nn.AttentionLSTM({ID,IH,IW}, SD, H)
+  local h = lstm:forward({c0, h0, a0, I, x})
+
+  tester:asserteq(h, h)
+end
+
 function tests.gradcheck()
   local N, T, SD, H, ID, IH,IW = 5, 6, 7, 8, 9, 10,10 
 
