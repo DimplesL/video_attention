@@ -194,27 +194,6 @@ for i = 1, num_iterations do
   -- Maybe save a checkpoint
   local check_every = opt.checkpoint_every
   if (check_every > 0 and i % check_every == 0) or i == num_iterations then
-    -- Evaluate loss on the validation set. Note that we reset the state of
-    -- the model; this might happen in the middle of an epoch, but that
-    -- shouldn't cause too much trouble.
-    --model:evaluate()
-    --model:resetStates()
-    --local num_val = loader.split_sizes['val']
-    --local val_loss = 0
-    --for j = 1, num_val do
-      --local xv, yv = loader:nextBatch('val')
-      --xv = xv:type(dtype)
-      --yv = yv:type(dtype):view(N * T)
-      --local scores = model:forward(xv):view(N * T, -1)
-      --val_loss = val_loss + crit:forward(scores, yv)
-    --end
-    --val_loss = val_loss / num_val
-    --print('val_loss = ', val_loss)
-    --table.insert(val_loss_history, val_loss)
-    --table.insert(val_loss_history_it, i)
-    --model:resetStates()
-    --model:training()
-
     -- First save a JSON checkpoint, excluding the model
     local checkpoint = {
       opt = opt,
