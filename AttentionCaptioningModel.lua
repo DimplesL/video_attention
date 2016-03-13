@@ -55,9 +55,9 @@ end
 
 function AM:backward(input, gradOutput, scale)
   local nout = self.net:backward(self.rnn_input, gradOutput, scale)
-  local grad_h0 = out[1]
-  local grad_I = out[2]
-  local grad_x = out[3]
+  local grad_h0 = nout[1]
+  local grad_I = nout[2]
+  local grad_x = nout[3]
   -- run backwards through lookup, using true input
   return self.lookup:backward(input, grad_x, scale)
 end
