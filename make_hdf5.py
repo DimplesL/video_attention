@@ -235,7 +235,7 @@ for dset_name, dset_map in maps.iteritems():
         capt_idxs = dset_map[i]
 
         # Check that there is a caption here
-        assert ~np.all(capt_idxs < 0)
+        assert(~np.all(capt_idxs < 0))
 
         # Get the valid caption indices
         validCapt = np.nonzero(capt_idxs >= 0)[0]
@@ -245,7 +245,7 @@ for dset_name, dset_map in maps.iteritems():
 
         # Check that the last caption comes before all -1 tokens
         if noCapt.shape[0] > 0:
-            assert(np.max(validCapt) > np.min(noCapt))
+            assert(np.max(validCapt) < np.min(noCapt))
 
         # Check that each valid caption has the same features and ID
         ref_feat = None
