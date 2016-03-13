@@ -149,9 +149,19 @@ function layer:softmax_forward(input)
   return torch.exp(x)/z
 end
 
+function layer:genDiag(v)
+--diag that works for cuda....
+   n = v:size(1)
+   D = v:clone():resize(n, n):zero()
+   for i = 1,n do
+       D[{i,i}]= v[i]
+   end
+   return D
+end
+
 function layer:softmax_backward(sm,dout)
   local P = torch.ger(-sm,sm)
-  P:add(torch.diag(sm))
+  P:add(layer:genDiag(sm))
   return torch.mv(P,dout)
 end
 
