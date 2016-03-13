@@ -14,7 +14,6 @@ local cmd = torch.CmdLine()
 cmd:option('-input_h5', '/data/coco/coco_bgr_noavg.h5')
 cmd:option('-input_json', '/data/coco/coco_vocab.json')
 cmd:option('-batch_size', 50)
-cmd:option('-seq_length', 50)
 
 -- Model options
 cmd:option('-model_type', 'lstm')
@@ -80,15 +79,21 @@ for k, v in pairs(vocab.idx_to_token) do
   idx_to_token[tonumber(k)+1] = v
 end
 
--- Initialize the model and criterion
+-- Load a batch to get the dimensions
+N, T = loader.batch_size, loader.capt_len
 local opt_clone = torch.deserialize(torch.serialize(opt))
 opt_clone.idx_to_token = idx_to_token
+local feats, capts = loader:nextBatch('train')
+opt_clone.im_size = {feats[1].size(2), feats[1].size(3)}
+print(string.format('Detected image size %dx%d', opt_clone.im_size[1], 
+    opt_clone.im_size[2]))
+
+-- Initialize the model and criterion
 local model = nn.AttentionCaptioningModel(opt_clone):type(dtype)
 local params, grad_params = model:getParameters()
 local crit = nn.CrossEntropyCriterion():type(dtype)
 
 -- Set up some variables we will use below
-local N, T = opt.batch_size, opt.seq_length
 local train_loss_history = {}
 local val_loss_history = {}
 local val_loss_history_it = {}

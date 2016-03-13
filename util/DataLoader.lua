@@ -9,8 +9,6 @@ local DataLoader = torch.class('DataLoader')
 function DataLoader:__init(kwargs)
   local h5_file = utils.get_kwarg(kwargs, 'input_h5')
   self.batch_size = utils.get_kwarg(kwargs, 'batch_size')
-  self.seq_length = utils.get_kwarg(kwargs, 'seq_length')
-  local N, T = self.batch_size, self.seq_length
 
   self.split_sizes = {}
   -- Lovingly slurp all the moist, dripping data from the hard disk into memory

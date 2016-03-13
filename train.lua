@@ -14,7 +14,6 @@ local cmd = torch.CmdLine()
 cmd:option('-input_h5', 'data/tiny-shakespeare.h5')
 cmd:option('-input_json', 'data/tiny-shakespeare.json')
 cmd:option('-batch_size', 50)
-cmd:option('-seq_length', 50)
 
 -- Model options
 cmd:option('-model_type', 'lstm')
@@ -88,7 +87,7 @@ local params, grad_params = model:getParameters()
 local crit = nn.CrossEntropyCriterion():type(dtype)
 
 -- Set up some variables we will use below
-local N, T = opt.batch_size, opt.seq_length
+local N, T = loader.batch_size, loader.capt_len
 local train_loss_history = {}
 local val_loss_history = {}
 local val_loss_history_it = {}
