@@ -186,15 +186,14 @@ for dset_name,dset_capts in idx_captions.iteritems():
   for im_id, im_captions in dset_capts.iteritems():
     # If necessary, add this image to the map_idx lookup table.
     if im_id not in map_idx:
-        map_idx[im_id] = len(map_idx)
-        new_row = -np.ones(shape=(1, im_max_capts[dset_name]), dtype=np.int64)
-        if maps[dset_name] is None:
-                assert(map_idx[im_id] == 0)
-                maps[dset_name] = new_row
-        else:
-                assert(map_idx[im_id] == maps[dset_name].shape[0])
-                maps[dset_name] = \
-                        np.concatenate((maps[dset_name], new_row), axis=0)
+      map_idx[im_id] = len(map_idx)
+      new_row = -np.ones(shape=(1, im_max_capts[dset_name]), dtype=np.int64)
+      if maps[dset_name] is None:
+         assert(map_idx[im_id] == 0)
+         maps[dset_name] = new_row
+      else:
+         assert(map_idx[im_id] == maps[dset_name].shape[0])
+         maps[dset_name] = np.concatenate((maps[dset_name], new_row), axis=0)
 
     # Get the name of the .npy features file
     fname = os.path.join(dset_dirs[dset_name], \
@@ -229,35 +228,38 @@ for dset_name,dset_capts in idx_captions.iteritems():
         print "Saved %d %s captions out of %d" % (curr_capt,dset_name,num_capts[dset_name])
 
 # Check the maps for validity
-print 'Verifying the maps before saving...'
-for dset_name, dset_map in maps.iteritems():
+try:
+  print 'Verifying the maps before saving...'
+  for dset_name, dset_map in maps.iteritems():
     for i in range(dset_map.shape[0]):
-        capt_idxs = dset_map[i]
+      capt_idxs = dset_map[i]
 
-        # Check that there is a caption here
-        assert(~np.all(capt_idxs < 0))
+      # Check that there is a caption here
+      assert(~np.all(capt_idxs < 0))
 
-        # Get the valid caption indices
-        validCaptIdx = np.nonzero(capt_idxs >= 0)[0]
+      # Get the valid caption indices
+      validCaptIdx = np.nonzero(capt_idxs >= 0)[0]
 
-        # Get the 'no caption' indices
-        noCaptIdx = np.nonzero(capt_idxs < 0)[0]
+      # Get the 'no caption' indices
+      noCaptIdx = np.nonzero(capt_idxs < 0)[0]
 
-        # Check that the last caption comes before all -1 tokens
-        if noCaptIdx.shape[0] > 0:
-            assert(np.max(validCaptIdx) < np.min(noCaptIdx))
+      # Check that the last caption comes before all -1 tokens
+      if noCaptIdx.shape[0] > 0:
+        assert(np.max(validCaptIdx) < np.min(noCaptIdx))
 
-        # Check that each valid caption has the same features and ID
-        ref_feat = None
-        ref_id = None
-        for capt_idx in capt_idxs[validCaptIdx]:
-            if ref_feat is None:
-                assert(ref_id is None)
-                ref_feat = dset_feats[dset_name][capt_idx]
-                ref_id = dset_names[dset_name][capt_idx]
-            else:
-                assert(np.all(np.equal(dset_feats[dset_name][capt_idx], ref_feat)))
-                assert(np.all(np.equal(dset_names[dset_name][capt_idx], ref_id)))
+      # Check that each valid caption has the same features and ID
+      ref_feat = None
+      ref_id = None
+      for capt_idx in capt_idxs[validCaptIdx]:
+        if ref_feat is None:
+          assert(ref_id is None)
+          ref_feat = dset_feats[dset_name][capt_idx]
+          ref_id = dset_names[dset_name][capt_idx]
+        else:
+          assert(np.all(np.equal(dset_feats[dset_name][capt_idx], ref_feat)))
+          assert(np.all(np.equal(dset_names[dset_name][capt_idx], ref_id)))
+except:
+  print 'WARNING: file did not pass tests'
 
 # Add the maps to the h5 file
 for dset_name, dset_map in maps.iteritems():
