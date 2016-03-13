@@ -17,31 +17,34 @@ local function check_size(x, dims)
 end
 
 function tests.gradcheck()
-  local N, T, D, H, I = 5, 6, 7, 8, {2048, 8, 8}
-  local lstm = nn.AttentionLSTM(I, D, H)
+  local N, T, SD, H, ID, IH,IW = 5, 6, 7, 8, 9, 10,10 
 
-  local x = torch.randn(N, T, D)
+  local x = torch.randn(N, T, SD)
+  local I = torch.randn(N, ID, IH, IW)
   local h0 = torch.randn(N, H)
   local c0 = torch.randn(N, H)
+  local a0 = torch.randn(N, IH*IW)
   
-  local lstm = nn.AttentionLSTM(D, H)
-  local h = lstm:forward{c0, h0, x}
+  local lstm = nn.AttentionLSTM({ID,IH,IW}, SD, H)
+  local h = lstm:forward({c0, h0, a0, I, x})
 
   local dh = torch.randn(#h)
 
   lstm:zeroGradParameters()
-  local dc0, dh0, dx = unpack(lstm:backward({c0, h0, x}, dh))
+  local dc0, dh0, da0, dI, dx = unpack(lstm:backward({c0, h0, a0, I, x}, dh))
   local dw = lstm.gradWeight:clone()
   local db = lstm.gradBias:clone()
 
-  local function fx(x)   return lstm:forward{c0, h0, x} end
-  local function fh0(h0) return lstm:forward{c0, h0, x} end
-  local function fc0(c0) return lstm:forward{c0, h0, x} end
+  local function fh0(h0) return lstm:forward{c0, h0, a0, I, x} end
+  local function fc0(c0) return lstm:forward{c0, h0, a0, I, x} end
+  local function fa0(a0) return lstm:forward{c0, h0, a0, I, x} end
+  local function fx(x)   return lstm:forward{c0, h0, a0, I, x} end
+  --local function fI(I)   return lstm:forward{c0, h0, a0, I, x} end
 
   local function fw(w)
     local old_w = lstm.weight
     lstm.weight = w
-    local out = lstm:forward{c0, h0, x}
+    local out = lstm:forward{c0, h0, a0, I, x}
     lstm.weight = old_w
     return out
   end
@@ -49,31 +52,43 @@ function tests.gradcheck()
   local function fb(b)
     local old_b = lstm.bias
     lstm.bias = b
-    local out = lstm:forward{c0, h0, x}
+    local out = lstm:forward{c0, h0, a0, I, x}
     lstm.bias = old_b
     return out
   end
-
+  
   local dx_num = gradcheck.numeric_gradient(fx, x, dh)
+   
+  out = fx(x)
+  if torch.any(out:ne(out)) then
+    print(out)
+    print(out:ne(out))
+    print("This is fucked, boys")
+  end
+
   local dh0_num = gradcheck.numeric_gradient(fh0, h0, dh)
   local dc0_num = gradcheck.numeric_gradient(fc0, c0, dh)
+  local da0_num = gradcheck.numeric_gradient(fa0, a0, dh)
+--  local dI_num = gradcheck.numeric_gradient(fI, I, dh)
   local dw_num = gradcheck.numeric_gradient(fw, lstm.weight, dh)
   local db_num = gradcheck.numeric_gradient(fb, lstm.bias, dh)
 
   local dx_error = gradcheck.relative_error(dx_num, dx)
   local dh0_error = gradcheck.relative_error(dh0_num, dh0)
   local dc0_error = gradcheck.relative_error(dc0_num, dc0)
+  local da0_error = gradcheck.relative_error(da0_num, da0)
   local dw_error = gradcheck.relative_error(dw_num, dw)
   local db_error = gradcheck.relative_error(db_num, db)
 
   tester:assertle(dh0_error, 1e-4)
   tester:assertle(dc0_error, 1e-5)
+  tester:assertle(da0_error, 1e-5)
   tester:assertle(dx_error, 1e-5)
   tester:assertle(dw_error, 1e-4)
   tester:assertle(db_error, 1e-5)
 end
 
-
+--[[
 -- Make sure that everything works correctly when we don't pass an initial cell
 -- state; in this case we do pass an initial hidden state and an input sequence
 function tests.noCellTest()
@@ -154,7 +169,7 @@ function tests.rememberStatesTest()
   tester:assertTensorEq(lstm.c0, torch.zeros(N, H), 0)
   tester:assertTensorEq(lstm.h0, torch.zeros(N, H), 0)
 end
-
+--]]
 
 tester:add(tests)
 tester:run()
