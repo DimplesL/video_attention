@@ -33,7 +33,7 @@ function tests.forward()
 end
 
 function tests.gradcheck()
-  local N, T, SD, H, ID, IH,IW = 5, 6, 7, 8, 9, 10,10 
+  local N, T, SD, H, ID, IH,IW = 2, 2, 7, 8, 9, 10,10 
 
   local x = torch.randn(N, T, SD)
   local I = torch.randn(N, ID, IH, IW)
@@ -51,7 +51,13 @@ function tests.gradcheck()
   local dw = lstm.gradWeight:clone()
   local db = lstm.gradBias:clone()
 
-  local function fh0(h0) return lstm:forward{c0, h0, a0, I, x} end
+  local function isnan(a)
+    return torch.any(a:ne(a))
+  end
+
+  local function fh0(h0) 
+    return lstm:forward{c0, h0, a0, I, x} 
+  end
   local function fc0(c0) return lstm:forward{c0, h0, a0, I, x} end
   local function fa0(a0) return lstm:forward{c0, h0, a0, I, x} end
   local function fx(x)   return lstm:forward{c0, h0, a0, I, x} end

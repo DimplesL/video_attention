@@ -39,7 +39,6 @@ function layer:__init(image_input_dims, seq_input_dim, hidden_dim)
   self.buffer2 = torch.Tensor() -- This will be (N, H)
   self.buffer3 = torch.Tensor() -- This will be (H,)
   self.buffer4 = torch.Tensor() -- This will be (H,)
-  self.buffer5 = torch.Tensor() -- This will be (H,)
   self.grad_a_buffer = torch.Tensor() -- This will be (N, 4H)
 
   self.h0 = torch.Tensor()
@@ -197,7 +196,6 @@ function layer:updateOutput(input)
       a0:resize(N,IH*IW):fill(1/(IH*IW))
     end
   end
-
   -- create N copies of the bias
   local weight_height = (4*H) + (IH*IW)
   local bias_expand = self.bias:view(1, weight_height ):expand(N, weight_height)
@@ -223,9 +221,8 @@ function layer:updateOutput(input)
     local next_c = c[{{}, t}] -- NxH
     local cur_gates = self.gates[{{}, t}] -- current gate values
     local cur_input = input_buf[{{}, t}] -- current gate values
-    cur_input[{{},{1,SD}}] = x[{{},t}]-- put the current x into the input
-    local tmp = torch.Tensor()
-    tmp:resize(N,ID,1)
+    cur_input[{{},{1,SD}}]:copy(x[{{},t}])-- put the current x into the input
+    local tmp = torch.Tensor(N,ID,1):zero()
     tmp:baddbmm(I,prev_a:reshape(N,IH*IW,1)) -- add the image to the input
     cur_input[{{},{SD+1,-1}}]:copy(tmp:squeeze())
     --cur_input[{{},{SD+1,-1}}]:view(N,ID,1):baddbmm(I:view(N,ID,IH*IW),prev_a:view(N,IH*IW,1)) -- add the image to the input
@@ -245,7 +242,6 @@ function layer:updateOutput(input)
     next_h:tanh(next_c):cmul(o) --finish computing hidden
     prev_h, prev_c, prev_a =  next_h, next_c, next_a --update vars
   end
-
   return self.output
 end
 
@@ -260,7 +256,8 @@ function layer:backward(input, gradOutput, scale)
   if not h0 then h0 = self.h0 end
   if not att0 then att0 = self.att0 end -- this is initialized to the default uniform distribution in "updateOutput"
 
-  local grad_c0, grad_h0, grad_a0, grad_x, grad_att, grad_seq, grad_im = self.grad_c0, self.grad_h0, self.grad_a0, self.grad_x, self.grad_att, self.grad_seq, self.grad_im
+  local grad_c0, grad_h0, grad_a0 = self.grad_c0, self.grad_h0, self.grad_a0;
+  local grad_x, grad_att, grad_im =  self.grad_x, self.grad_att, self.grad_im
   local h, c = self.output, self.cell
   local grad_h = gradOutput -- grad with respect to output
 
@@ -273,7 +270,6 @@ function layer:backward(input, gradOutput, scale)
   grad_c0:resizeAs(c0):zero()
   grad_a0:resize(N,IH*IW):zero() 
   grad_x:resize(N,T,D):zero() 
-  grad_seq:resizeAs(x):zero()
   grad_im:resizeAs(I):zero()
   grad_att:resizeAs(att0):zero()
   local grad_next_h = self.buffer1:resizeAs(h0):zero()
@@ -301,6 +297,7 @@ function layer:backward(input, gradOutput, scale)
     local grad_ao = grad_a[{{}, {2 * H + 1, 3 * H}}]
     local grad_ag = grad_a[{{}, {3 * H + 1, 4 * H}}]
     local grad_a_att = grad_a[{{}, {4 * H + 1, -1}}]
+
     
     -- We will use grad_ai, grad_af, and grad_ao as temporary buffers
     -- to to compute grad_next_c. We will need tanh_next_c (stored in grad_ai)
@@ -340,24 +337,22 @@ function layer:backward(input, gradOutput, scale)
     grad_a_att:add(softmax_backward(next_att,grad_next_att))
     grad_x[{{}, t}]:mm(grad_a, Wx:t())
     -- split gradx into its image part and its 
-    grad_seq = grad_x[{{},t,{1,SD}}]
     local grad_attended_im = grad_x[{{},t,{SD+1,-1}}]
-     
     grad_Wx:addmm(scale, self.input_buf[{{}, t}]:t(), grad_a)
     grad_Wh:addmm(scale, prev_h:t(), grad_a)
     local grad_a_sum = self.buffer3:resize(H):sum(grad_a, 1)
     grad_b:add(scale, grad_a_sum)
-    local tmp = torch.Tensor()
     grad_next_att:view(N,IH*IW,1):baddbmm(I:transpose(2,3),grad_attended_im:reshape(N,ID,1))
-    self.buffer5:resize(N,ID,IH*IW):baddbmm(grad_attended_im:reshape(N,ID,1),prev_att:reshape(N,1,IH*IW))
-    grad_im:add(self.buffer5:view(N,ID,IH,IW))
+    local tmp =  torch.bmm(grad_attended_im:reshape(N,ID,1),prev_att:reshape(N,1,IH*IW))
+    grad_im:add(tmp:view(N,ID,IH,IW))
     grad_next_h:mm(grad_a, Wh:t())
     grad_next_c:cmul(f)
   end
   grad_h0:copy(grad_next_h)
   grad_c0:copy(grad_next_c)
   grad_a0:copy(grad_next_att)
-
+  self.grad_seq:resizeAs(x)
+  self.grad_seq:copy(grad_x[{{},{},{1,SD}}])
   if self._return_grad_c0 and self._return_grad_h0 and self._return_grad_a0 then
     self.gradInput = {self.grad_c0, self.grad_h0, self.grad_a0, self.grad_im, self.grad_seq}
   elseif self._return_grad_h0 and self._return_grad_c0 then
