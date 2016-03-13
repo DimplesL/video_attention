@@ -21,6 +21,7 @@ function gradcheck.numeric_gradient(f, x, df, eps)
   local dx_num = x.new(#x):zero()
   local dx_num_flat = dx_num:view(n)
   for i = 1, n do
+    --print("iteration ", i)
     local orig = x_flat[i]
     
     x_flat[i] = orig + eps
@@ -43,6 +44,9 @@ function gradcheck.numeric_gradient(f, x, df, eps)
     end
     
     dx_num_flat[i] = d
+--    if torch.any(dx_num:ne(dx_num)) then
+      --print("Confirmed as fucked from gradutils")
+  --  end
     x_flat[i] = orig
   end
   return dx_num

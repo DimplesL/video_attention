@@ -50,11 +50,12 @@ function layer:__init(image_input_dims, seq_input_dim, hidden_dim)
 
   self.grad_c0 = torch.Tensor()
   self.grad_h0 = torch.Tensor()
+  self.grad_a0 = torch.Tensor()
   self.grad_x = torch.Tensor()
   self.grad_seq = torch.Tensor()
   self.grad_im = torch.Tensor()
   self.grad_att = torch.Tensor()
-  self.gradInput = {self.grad_c0, self.grad_h0, self.grad_att, self.grad_seq, self.grad_im}
+  self.gradInput = {self.grad_c0, self.grad_h0, self.grad_a0, self.grad_att, self.grad_seq, self.grad_im}
 end
 
 
@@ -130,6 +131,9 @@ end
 function softmax_forward(input)
   local x = input - input:max()
   local z = torch.sum(torch.exp(x))
+  if z == 0 then
+    print("Fuk")
+  end
   return torch.exp(x)/z
 end
 
@@ -149,6 +153,10 @@ Output:
 - h: Sequence of hidden states, (N, T, H)
 --]]
 
+function isnan(inp)
+  return torch.any(inp:ne(inp))
+end
+
 function layer:updateOutput(input)
   local c0, h0, a0, I, x = self:_unpack_input(input)
   local N, T, SD, ID, IH, IW, H = self:_get_sizes(input)
@@ -157,6 +165,7 @@ function layer:updateOutput(input)
   I = I:reshape(N,ID,IH*IW) -- I is the image features
   self._return_grad_c0 = (c0 ~= nil)
   self._return_grad_h0 = (h0 ~= nil)
+  self._return_grad_a0 = (a0 ~= nil)
   if not c0 then -- if c0 is not provided
     c0 = self.c0 -- load from current
     -- if current c0 is not initialized or we aren't remembering states 
@@ -208,6 +217,8 @@ function layer:updateOutput(input)
   -- holds the output of each gate
   self.gates:resize(N, T, weight_height):zero()
   for t = 1, T do
+    --print('t: h,c,a:',t, isnan(prev_h), isnan(prev_c), isnan(prev_a))
+
     local next_h = h[{{}, t}] -- NxH
     local next_c = c[{{}, t}] -- NxH
     local cur_gates = self.gates[{{}, t}] -- current gate values
@@ -249,7 +260,7 @@ function layer:backward(input, gradOutput, scale)
   if not h0 then h0 = self.h0 end
   if not att0 then att0 = self.att0 end -- this is initialized to the default uniform distribution in "updateOutput"
 
-  local grad_c0, grad_h0, grad_x, grad_att, grad_seq, grad_im = self.grad_c0, self.grad_h0, self.grad_x, self.grad_att, self.grad_seq, self.grad_im
+  local grad_c0, grad_h0, grad_a0, grad_x, grad_att, grad_seq, grad_im = self.grad_c0, self.grad_h0, self.grad_a0, self.grad_x, self.grad_att, self.grad_seq, self.grad_im
   local h, c = self.output, self.cell
   local grad_h = gradOutput -- grad with respect to output
 
@@ -260,6 +271,7 @@ function layer:backward(input, gradOutput, scale)
   local grad_b = self.gradBias
   grad_h0:resizeAs(h0):zero() 
   grad_c0:resizeAs(c0):zero()
+  grad_a0:resize(N,IH*IW):zero() 
   grad_x:resize(N,T,D):zero() 
   grad_seq:resizeAs(x):zero()
   grad_im:resizeAs(I):zero()
@@ -344,13 +356,22 @@ function layer:backward(input, gradOutput, scale)
   end
   grad_h0:copy(grad_next_h)
   grad_c0:copy(grad_next_c)
+  grad_a0:copy(grad_next_att)
 
-  if self._return_grad_c0 and self._return_grad_h0 then
-    self.gradInput = {self.grad_c0, self.grad_h0, self.grad_im, self.grad_seq}
+  if self._return_grad_c0 and self._return_grad_h0 and self._return_grad_a0 then
+    self.gradInput = {self.grad_c0, self.grad_h0, self.grad_a0, self.grad_im, self.grad_seq}
+  elseif self._return_grad_h0 and self._return_grad_c0 then
+    self.gradInput = {self.grad_h0, self.grad_c0, self.grad_im, self.grad_seq}
+  elseif self._return_grad_h0 and self._return_grad_a0 then
+    self.gradInput = {self.grad_h0, self.grad_a0, self.grad_im, self.grad_seq}
+  elseif self._return_grad_c0 and self._return_grad_a0 then
+    self.gradInput = {self.grad_c0, self.grad_a0, self.grad_im, self.grad_seq}
+  elseif self._return_grad_c0 then
+    self.gradInput = {self.grad_c0, self.grad_im, self.grad_seq}
   elseif self._return_grad_h0 then
     self.gradInput = {self.grad_h0, self.grad_im, self.grad_seq}
-  else
-    self.gradInput = {self.grad_im, self.grad_seq}
+  elseif self._return_grad_a0 then
+    self.gradInput = {self.grad_a0, self.grad_im, self.grad_seq}
   end
 
   return self.gradInput
@@ -367,6 +388,7 @@ function layer:clearState()
 
   self.grad_c0:set()
   self.grad_h0:set()
+  self.grad_a0:set()
   self.grad_x:set()
   self.grad_att:set()
   self.output:set()
