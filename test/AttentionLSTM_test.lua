@@ -33,7 +33,7 @@ function tests.forward()
 end
 
 function tests.gradcheck_softmaxTest()
-  local N, T, SD, H, ID, IH,IW = 1, 6, 7, 8, 9, 10,10 
+  local N, T, SD, H, ID, IH,IW = 5, 6, 7, 8, 9, 10,10 
   local lstm = nn.AttentionLSTM({ID,IH,IW}, SD, H)
   local att = torch.randn(N,IH*IW)
   local sm = lstm:softmax_forward_all(att)
@@ -49,7 +49,7 @@ function tests.gradcheck_softmaxTest()
 end
 
 function tests.gradcheck()
-  local N, T, SD, H, ID, IH,IW = 2, 3, 4, 5, 6, 7,7 
+  local N, T, SD, H, ID, IH,IW = 3, 4, 5, 6, 7, 8,8 
 
   local x = torch.randn(N, T, SD)
   local I = torch.randn(N, ID, IH, IW)
@@ -98,11 +98,6 @@ function tests.gradcheck()
   local dx_num = gradcheck.numeric_gradient(fx, x, dh)
    
   out = fx(x)
-  if torch.any(out:ne(out)) then
-    print(out)
-    print(out:ne(out))
-    print("This is fucked, boys")
-  end
 
   local dh0_num = gradcheck.numeric_gradient(fh0, h0, dh)
   local dc0_num = gradcheck.numeric_gradient(fc0, c0, dh)
@@ -118,12 +113,24 @@ function tests.gradcheck()
   local dw_error = gradcheck.relative_error(dw_num, dw)
   local db_error = gradcheck.relative_error(db_num, db)
 
-  tester:assertle(dh0_error, 1e-4)
-  tester:assertle(dc0_error, 1e-5)
-  tester:assertle(da0_error, 1e-5)
-  tester:assertle(dx_error, 1e-5)
-  tester:assertle(dw_error, 1e-4)
-  tester:assertle(db_error, 1e-5)
+  tester:assertle(dh0_error, 1e-4,"dh0 rel error too large")
+  tester:assertle(dc0_error, 1e-5,"dc0 rel error too large")
+  tester:assertle(da0_error, 1e-5,"da0 rel error too large")
+  tester:assertle(dx_error, 1e-5,"dx rel error too large")
+  tester:assertle(dw_error, 1e-4,"dw rel error too large")
+  tester:assertle(db_error, 1e-5,"db rel error too large")
+  abs_dh0_error = torch.abs(dh0 - dh0_num):sum()
+  abs_dc0_error = torch.abs(dc0 - dc0_num):sum()
+  abs_da0_error = torch.abs(da0 - da0_num):sum()
+  abs_dx_error = torch.abs(dx - dx_num):sum()
+  abs_dw_error = torch.abs(dw - dw_num):sum()
+  abs_db_error = torch.abs(db - db_num):sum()
+  tester:assertle(abs_dh0_error, 1e-5,"dh0 absolute error too large")
+  tester:assertle(abs_dc0_error, 1e-5,"dc0 absolute error too large")
+  tester:assertle(abs_da0_error, 1e-5, "da0 absolute error too large")
+  tester:assertle(abs_dx_error, 1e-5,"dx absolute error too large")
+  tester:assertle(abs_dw_error, 1e-5,"dw absolute error too large")
+  tester:assertle(abs_db_error, 1e-5,"db absolute error too large")
 end
 
 --[[

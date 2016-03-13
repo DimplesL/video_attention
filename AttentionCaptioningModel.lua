@@ -22,63 +22,45 @@ function AM:__init(kwargs)
 
   self.wordvec_dim = utils.get_kwarg(kwargs, 'wordvec_size')
   self.rnn_size = utils.get_kwarg(kwargs, 'rnn_size')
+  self.im_size = utils.get_kwarg(kwargs, 'im_size')
 
   local V, D, H = self.vocab_size, self.wordvec_dim, self.rnn_size
+  local ID, IH, IW = self.im_size[1], self.im_size[2], self.im_size[3]
 
-  self.rnns = {}
-  self.net = nn.Sequential()
 
-  self.lookup = nn.LookupTable(V, D)
-  for i = 1, self.num_layers do
-    local prev_dim = H
-    if i == 1 then prev_dim = D end
-    local rnn
-    if self.model_type == 'rnn' then
-      rnn = nn.VanillaRNN(prev_dim, H)
-    elseif self.model_type == 'lstm' then
-      rnn = nn.LSTM(prev_dim, H)
-    end
-    rnn.remember_states = false
-    table.insert(self.rnns, rnn)
-    self.net:add(rnn)
-    if self.batchnorm == 1 then
-      self.net:add(nn.TemporalAdapter(nn.BatchNormalization(H)))
-    end
-    if self.dropout > 0 then
-      self.net:add(nn.Dropout(self.dropout))
-    end
-  end
-
+  self.lookup = nn.LookupTable(V, D)a
+  self.net = nn.Sequentila()
+  self.net:add(nn.AttentionLSTM(self.im_size,D,H))
   self.net:add(nn.TemporalAdapter(nn.Linear(H, V)))
 end
 
 
 function AM:updateOutput(input)
   -- unpack h0 and x
-  local h0, x = nil, nil
-  if torch.type(input) == 'table' and #input == 2 then
-    h0, x = unpack(input)
-  elseif torch.isTensor(input) then
-    x = input
+  local h0, x, I = nil, nil, nil
+  if torch.type(input) == 'table' and #input == 3 then
+    h0, x, I = unpack(input)
+  elseif torch.type(input) == 'table' and #input == 2 then
+    x, I = unpack(input)
   else
     assert(false,"invalid input")
   end
   -- forward through the lookup layer
-  local out = self.lookup:forward(x)
+  local w_out = self.lookup:forward(x)
   -- package h0 with out from lookup
-  self.rnn_input = {h0,out}
+  self.rnn_input = {h0, I, w_out}
   -- call forward on rest of net
-  return self.net:forward(self.rnn_input)
+  return  self.net:forward(self.rnn_input)
 end
 
 
 function AM:backward(input, gradOutput, scale)
-  -- run backward through rnns, using saved output of lookup table
-  local out = self.net:backward(self.rnn_input, gradOutput, scale)
+  local nout = self.net:backward(self.rnn_input, gradOutput, scale)
   local grad_h0 = out[1]
-  local grad_rnn = out[2]
+  local grad_I = out[2]
+  local grad_x = out[3]
   -- run backwards through lookup, using true input
-  return self.lookup:backward(input, grad_rnn, scale)
+  return self.lookup:backward(input, grad_x, scale)
 end
 
 
