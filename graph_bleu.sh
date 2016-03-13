@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 
 # BLEU command
 BLEU="th /home/blaine/video_attention/eval_bleu.lua"
