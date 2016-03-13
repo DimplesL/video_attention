@@ -28,7 +28,7 @@ function AM:__init(kwargs)
   local ID, IH, IW = self.im_size[1], self.im_size[2], self.im_size[3]
 
 
-  self.lookup = nn.LookupTable(V, D)a
+  self.lookup = nn.LookupTable(V, D)
   self.net = nn.Sequentila()
   self.net:add(nn.AttentionLSTM(self.im_size,D,H))
   self.net:add(nn.TemporalAdapter(nn.Linear(H, V)))
