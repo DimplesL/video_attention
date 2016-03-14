@@ -392,6 +392,8 @@ function layer:backward(input, gradOutput, scale)
     self.gradInput = {self.grad_h0, self.grad_im, self.grad_seq}
   elseif self._return_grad_a0 then
     self.gradInput = {self.grad_a0, self.grad_im, self.grad_seq}
+  else
+    self.gradInput = {self.grad_im, self.grad_seq}
   end
 
   return self.gradInput
