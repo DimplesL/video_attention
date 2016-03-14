@@ -136,9 +136,11 @@ function AM:sample(kwargs)
   -- max length of caption
   local T = utils.get_kwarg(kwargs, 'length', 100)
   -- initial hidden state (image features)
-  local I = utils.get_kwarg(kwargs, 'h0')
+  local I = utils.get_kwarg(kwargs, 'I')
   -- array holding sampled caption
-  local sampled = torch.LongTensor(1, T)
+  local N,ID,IH,IW = I:size(1), I:size(2), I:size(3), I:size(4)
+  local sampled = torch.LongTensor(N, T)
+  local att = torch.Tensor(N,T+1,IH*IW)
   -- storage for scores and 
   local scores
   -- reset hidden and cell states
@@ -148,25 +150,28 @@ function AM:sample(kwargs)
     rnn:rememberStates(true)
   end
   -- get start token
-  local N = I:size(1)
   local x = torch.LongTensor(N,1):fill(self.token_to_idx["<START>"])
   -- first forward pass
-  scores = self:forward({I,x})[{{}, {1, 1}}]
+  scores = self:forward({I,x})
+  att[{{},1,{}}]:copy(self.rnns[1].att0)
   for t = 1, T do
     -- get the NxTxV (in this case 1x1xV) scores and take the argmax
     local _, next_word = scores:max(3)
+
     -- unpack the next word
     next_word = next_word[{{}, {}, 1}]
     -- copy the word into sampled
     sampled[{{}, {t, t}}]:copy(next_word)
     -- forward again with the sampled word
-    scores = self:forward(next_word)
+    scores = self:forward({I,next_word})
+    att[{{},t+1}]:copy(self.rnns[1].att0)
+
   end
   self:resetStates()
   for i, rnn in ipairs(self.rnns) do
     rnn:rememberStates(false)
   end
-  return sampled[1]
+  return sampled, att
 end
 
 

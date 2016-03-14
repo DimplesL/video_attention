@@ -135,7 +135,7 @@ function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
             end
 
 	    -- Predict this batch
-            local batchPred = torch.totable(model:sample({length=capt_len,h0=x}):reshape(thisBatchSize, capt_len))
+            local batchPred = torch.totable(model:sample({length=capt_len,I=x}):reshape(thisBatchSize, capt_len))
 
 	    -- Store the predictions
 	    for j=1,thisBatchSize do

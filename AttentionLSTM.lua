@@ -77,6 +77,7 @@ end
 function layer:resetStates()
   self.h0 = self.h0.new()
   self.c0 = self.c0.new()
+  self.att0 = self.att0.new()
 end
 
 local function check_dims(x, dims)
@@ -189,13 +190,13 @@ function layer:updateOutput(input)
   local D = SD + ID
 
   -- remember the previous I in remember_states mode
-  if self.remember_states then
+  --[[if self.remember_states then
   	if not I then
 	    I = self.I
   	else
 	    self.I = I 
   	end
-  end
+  end]]--
   -- reshape image feature volume as matrix
   I = I:reshape(N,ID,IH*IW) -- I is the image features
   self._return_grad_c0 = (c0 ~= nil)
@@ -230,6 +231,10 @@ function layer:updateOutput(input)
     a0 = self.att0
     if a0:nElement() == 0 then
       a0:resize(N,IH*IW):fill(1/(IH*IW))
+    elseif self.remember_states then
+      local prev_N, prev_T = self.gates:size(1), self.gates:size(2)
+      local blah = self.gates[{{},prev_T,{4*H+1,-1}}]
+      a0:copy(self.gates[{{},prev_T,{4*H+1,-1}}])
     end
   end
   -- create N copies of the bias
