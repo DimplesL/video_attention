@@ -54,6 +54,8 @@ function layer:__init(image_input_dims, seq_input_dim, hidden_dim)
   self.grad_im = torch.Tensor()
   self.grad_att = torch.Tensor()
   self.gradInput = {self.grad_c0, self.grad_h0, self.grad_a0, self.grad_att, self.grad_seq, self.grad_im}
+ 
+  self.I = nil -- Remember the last image in remember_states mode
 end
 
 
@@ -185,6 +187,15 @@ function layer:updateOutput(input)
   local c0, h0, a0, I, x = self:_unpack_input(input)
   local N, T, SD, ID, IH, IW, H = self:_get_sizes(input)
   local D = SD + ID
+
+  -- remember the previous I in remember_states mode
+  if self.remember_states then
+  	if not I then
+	    I = self.I
+  	else
+	    self.I = I 
+  	end
+  end
   -- reshape image feature volume as matrix
   I = I:reshape(N,ID,IH*IW) -- I is the image features
   self._return_grad_c0 = (c0 ~= nil)

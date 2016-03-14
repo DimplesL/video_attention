@@ -6,8 +6,8 @@ nohup th train_att.lua -input_h5 /data/coco/coco_bgr_noavg.h5 \
              -wordvec_size 1536 \
              -rnn_size 2048 \
              -num_layers 1 \
-             -learning_rate 0.001 \
-             -checkpoint_every 250 \
-             -checkpoint_name /data/checkpoints/64_1536_2_2500_att  \
+             -learning_rate 0.0005 \
+             -checkpoint_every 50 \
+             -checkpoint_name /data/checkpoints/64_1536_1_2500_att  \
              -lr_decay_every 2500 \
-             -max_epochs 500 | tee trainAtt.log &
+             -max_epochs 10 | tee trainAtt.log

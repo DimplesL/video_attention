@@ -136,7 +136,7 @@ function AM:sample(kwargs)
   -- max length of caption
   local T = utils.get_kwarg(kwargs, 'length', 100)
   -- initial hidden state (image features)
-  local h0 = utils.get_kwarg(kwargs, 'h0', torch.zeros(self.rnn_size))
+  local I = utils.get_kwarg(kwargs, 'h0')
   -- array holding sampled caption
   local sampled = torch.LongTensor(1, T)
   -- storage for scores and 
@@ -148,9 +148,10 @@ function AM:sample(kwargs)
     rnn:rememberStates(true)
   end
   -- get start token
-  local x = torch.LongTensor(1):fill(self.token_to_idx["<START>"]):view(1,-1)
+  local N = I:size(1)
+  local x = torch.LongTensor(N,1):fill(self.token_to_idx["<START>"])
   -- first forward pass
-  scores = self:forward({h0,x})[{{}, {1, 1}}]
+  scores = self:forward({I,x})[{{}, {1, 1}}]
   for t = 1, T do
     -- get the NxTxV (in this case 1x1xV) scores and take the argmax
     local _, next_word = scores:max(3)

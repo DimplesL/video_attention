@@ -1,5 +1,6 @@
 require 'torch'
 require 'LanguageModel'
+require 'AttentionCaptioningModel'
 require 'hdf5'
 
 bleu = {}
@@ -72,6 +73,20 @@ function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
     local capt_len = captions_dset:dataspaceSize()[2]
     print(string.format('Detected %d images...', num_imgs))
 
+    -- Get the image size for attention features
+    local image_size = nil
+    if feat_dset:dataspaceSize()[3] ~= nil then
+      image_size = {}
+      for idx, size in pairs(feat_dset:dataspaceSize()) do
+        if idx > 1 then
+          image_size[#image_size + 1] = size
+        end
+        if idx > 2 then
+          feat_len = feat_len * size
+        end
+      end
+   end
+
     -- Initialize the model
     model:evaluate()
     model:resetStates()
@@ -90,7 +105,12 @@ function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
             local thisBatchSize = math.min(batchSize, num_imgs - i + 1)
 
             -- Load each image's features
-	    local x = torch.zeros(thisBatchSize, feat_len):type(dtype)
+	    local x = nil
+	    if image_size == nil then
+	    	x = torch.zeros(thisBatchSize, feat_len):type(dtype)
+	    else
+	    	x = torch.zeros(thisBatchSize, image_size[1], image_size[2], image_size[3]):type(dtype)
+	    end
             for j=1,thisBatchSize do
                 -- Load the caption indices for this image
 		local im_idx = i + j - 1
@@ -103,8 +123,15 @@ function bleu.getScore(checkpoint, h5name, split, mode, device, batchSize)
 		    num_imgs = i - 1
 		    break
                 end
-                local feat = feat_dset:partial({feat_idx, feat_idx},{1, feat_len})
-                x[{j,{}}] = feat:type(dtype):reshape(1, feat_len)
+		local feat = nil
+		if image_size == nil then
+                    feat = feat_dset:partial({feat_idx, feat_idx},{1, feat_len})
+                    x[{j,{}}] = feat:type(dtype):reshape(1, feat_len)
+		else
+    		    feat = feat_dset:partial({feat_idx,feat_idx},{1,image_size[1]},
+					  {1,image_size[2]},{1,image_size[3]})
+                    x[{j,{},{},{}}] = feat:type(dtype):reshape(1, image_size[1], image_size[2], image_size[3])
+		end
             end
 
 	    -- Predict this batch
